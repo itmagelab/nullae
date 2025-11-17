@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="0ae - NullAE." />
+        <meta name="keywords" content="DevOps, SRE, Linux, UNIX" />
+        <meta name="author" content="Семенов Андрей Владимирович" />
+
+        <!-- Open Graph -->
+        <meta property="og:title" content="NullAE" />
+        <meta property="og:description" content="Senior DevOps, SRE" />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="/images/og-image.png" />
+
+        <title>0ae - NullAE</title>
+
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- Google Fonts - Sansation -->
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Sansation:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+
+        <!-- Tailwind config for custom font -->
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sansation: ['"Sansation"', "sans-serif"],
+                        },
+                    },
+                },
+            };
+        </script>
+
+        <!-- Font Awesome -->
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+
+        <!-- Trunk static assets -->
+        <link data-trunk rel="copy-dir" href="static" />
+    </head>
+    <body>
+        <div id="app"></div>
+    </body>
+</html>

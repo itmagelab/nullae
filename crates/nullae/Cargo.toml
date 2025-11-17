@@ -1,0 +1,17 @@
+[package]
+name = "nullae"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "0ae"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+anyhow.workspace = true
+nullae-core.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4.5.51", features = ["derive"] }

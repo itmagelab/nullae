@@ -1,0 +1,16 @@
+{
+  email root@itmage.ru
+  log
+}
+
+0ae.ru {
+  reverse_proxy 0api:3000
+}
+
+:8500 {
+  reverse_proxy consul1:8500 consul2:8500 consul3:8500
+}
+
+:8600 {
+  reverse_proxy consul1:8600 consul2:8600 consul3:8600
+}

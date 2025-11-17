@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+default-members = ["crates/nullae", "crates/nullae-api"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+authors = ["Andrey Semenov <i@itmage.ru>"]
+license = "MIT"
+homepage = "https://github.com/itmagelab/nullae"
+repository = "https://github.com/itmagelab/nullae"
+
+[workspace.dependencies]
+nullae-core = { path = "crates/nullae-core" }
+nullae-macros = { path = "crates/nullae-macros" }
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }
+anyhow = "1.0.100"
+tracing = { version = "0.1.41", features = ["attributes"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+reqwest = { version = "0.12.24", default-features = false, features = [
+  "rustls-tls",
+  "json",
+] }
+serde_json = "1.0.145"
+serde = "1.0.228"
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors"] }
+url = "2.5.7"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

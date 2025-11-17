@@ -1,0 +1,51 @@
+---
+services:
+  caddy:
+    image: caddy:latest
+    restart: always
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  0api:
+    image: wilful/nullae:${NULLAE_VERSION:-latest}
+    restart: always
+    scale: 1
+    command: /bin/0api
+    environment:
+      RUST_LOG: debug
+      NULLAE_CONSUL_URL: http://caddy:8500
+
+  consul1:
+    image: consul:1.15.4
+    command: >
+      agent -server -bootstrap-expect=3 -node=consul1 -client=0.0.0.0
+      -ui -retry-join=consul2 -retry-join=consul3
+    volumes:
+      - db-data1:/consul/data
+    restart: unless-stopped
+
+  consul2:
+    image: consul:1.15.4
+    command: >
+      agent -server -bootstrap-expect=3 -node=consul2 -client=0.0.0.0
+      -ui -retry-join=consul1 -retry-join=consul3
+    volumes:
+      - db-data2:/consul/data
+    restart: unless-stopped
+
+  consul3:
+    image: consul:1.15.4
+    command: >
+      agent -server -bootstrap-expect=3 -node=consul3 -client=0.0.0.0
+      -ui -retry-join=consul1 -retry-join=consul2
+    volumes:
+      - db-data3:/consul/data
+    restart: unless-stopped
+
+volumes:
+  db-data1: {}
+  db-data2: {}
+  db-data3: {}

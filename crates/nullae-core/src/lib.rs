@@ -1,0 +1,152 @@
+pub(crate) mod entity;
+pub mod handler;
+pub(crate) mod index;
+pub mod prelude;
+pub mod repository;
+
+use crate::{index::Index, prelude::Repository};
+use base64::{Engine, prelude::BASE64_STANDARD};
+use serde::{Deserialize, Serialize};
+
+pub(crate) const BASE_PATH: &str = "0ae";
+pub(crate) const SHORT_HASH: usize = 8;
+
+#[derive(Default, Serialize, Deserialize, Debug)]
+pub struct Metadata {
+    created_at: chrono::NaiveDateTime,
+    updated_at: Option<chrono::NaiveDateTime>,
+    children: Option<Vec<String>>,
+}
+
+impl Metadata {
+    fn new() -> Self {
+        let created_at = chrono::Local::now().naive_local();
+        Self {
+            created_at,
+            ..Default::default()
+        }
+    }
+
+    pub fn update(mut self) -> Self {
+        let updated_at = chrono::Local::now().naive_local();
+        self.updated_at = Some(updated_at);
+
+        self
+    }
+}
+
+pub trait Hashable {
+    fn hash(&self) -> String;
+}
+
+impl Hashable for str {
+    fn hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(self.as_bytes());
+        hex::encode(hasher.finalize())
+    }
+}
+
+impl Hashable for String {
+    fn hash(&self) -> String {
+        self.as_str().hash()
+    }
+}
+
+pub trait Indexable {
+    fn index(&self) -> anyhow::Result<Index>;
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Record {
+    create_index: usize,
+    flags: usize,
+    key: String,
+    lock_index: usize,
+    modify_index: usize,
+    value: String,
+}
+
+impl Record {
+    pub fn create_index(&self) -> usize {
+        self.create_index
+    }
+
+    pub fn flags(&self) -> usize {
+        self.flags
+    }
+
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn lock_index(&self) -> usize {
+        self.lock_index
+    }
+
+    pub fn modify_index(&self) -> usize {
+        self.modify_index
+    }
+
+    pub fn value_as_slice(&self) -> Result<Vec<u8>, anyhow::Error> {
+        let value = BASE64_STANDARD.decode(&self.value)?;
+        Ok(value)
+    }
+
+    pub fn value(&self) -> Result<serde_json::Value, anyhow::Error> {
+        let value = self.value_as_slice()?;
+        let value: serde_json::Value = serde_json::from_slice(&value.to_vec())?;
+        Ok(value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prelude::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn it_works_async() {
+        use futures::stream::{self, StreamExt};
+
+        let repository = Repository::new().unwrap();
+        let count = 100;
+
+        let domain = Domain::create("async", &repository).await.unwrap();
+
+        let start_creation = std::time::Instant::now();
+        let nodes: Vec<Node> = stream::iter(0..count)
+            .map(|i| {
+                let repository = &repository;
+                let domain = domain.clone();
+                async move {
+                    let node_name = format!("node-{}", i);
+                    Node::create_with_index(&node_name, &domain, repository)
+                        .await
+                        .unwrap()
+                }
+            })
+            .buffer_unordered(100)
+            .collect()
+            .await;
+        let duration_creation = start_creation.elapsed();
+        println!("Creation time {} Node: {:?}", count, duration_creation);
+
+        let start_creation = std::time::Instant::now();
+        stream::iter(nodes)
+            .map(|node| {
+                let repository = &repository;
+                async move {
+                    node.delete(repository).await.unwrap();
+                }
+            })
+            .buffer_unordered(100)
+            .collect::<()>()
+            .await;
+        let duration_creation = start_creation.elapsed();
+        println!("Deletion time {} Node: {:?}", count, duration_creation);
+
+        domain.delete(&repository).await.unwrap();
+    }
+}
