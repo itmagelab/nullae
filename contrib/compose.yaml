@@ -1,25 +1,31 @@
 ---
 services:
-  caddy:
+  consul-lb:
     image: caddy:latest
+    networks:
+      - local
     restart: always
-    ports:
-      - "443:443"
-      - "80:80"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
 
   0api:
-    image: wilful/nullae:${NULLAE_VERSION:-latest}
+    image: ghcr.io/itmagelab/nullae:master
+    networks:
+      - caddy
+      - local
     restart: always
     scale: 1
     command: /bin/0api
     environment:
       RUST_LOG: debug
-      NULLAE_CONSUL_URL: http://caddy:8500
+      NULLAE_CONSUL_URL: http://consul-lb:8500
 
   consul1:
     image: consul:1.15.4
+    networks:
+      - local
+    ports:
+      - "8500:8500"
     command: >
       agent -server -bootstrap-expect=3 -node=consul1 -client=0.0.0.0
       -ui -retry-join=consul2 -retry-join=consul3
@@ -29,15 +35,18 @@ services:
 
   consul2:
     image: consul:1.15.4
+    networks:
+      - local
     command: >
       agent -server -bootstrap-expect=3 -node=consul2 -client=0.0.0.0
       -ui -retry-join=consul1 -retry-join=consul3
     volumes:
       - db-data2:/consul/data
     restart: unless-stopped
-
   consul3:
     image: consul:1.15.4
+    networks:
+      - local
     command: >
       agent -server -bootstrap-expect=3 -node=consul3 -client=0.0.0.0
       -ui -retry-join=consul1 -retry-join=consul2
@@ -49,3 +58,8 @@ volumes:
   db-data1: {}
   db-data2: {}
   db-data3: {}
+
+networks:
+  local:
+  caddy:
+    external: true
