@@ -12,7 +12,9 @@ impl Config {
             "http://localhost:3000".to_string()
         } else {
             // Production environment
-            web_sys::console::log_1(&"Config: Using production API URL https://api.0ae.ru".into());
+            web_sys::console::log_1(
+                &"Config: Using production API URL https://api.lab.0ae.ru".into(),
+            );
             "https://api.lab.0ae.ru".to_string()
         };
 
