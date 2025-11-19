@@ -21,11 +21,14 @@ pub async fn list() -> Result<(), anyhow::Error> {
 pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
     let repository = Repository::new().unwrap();
     let mut entities = repository.find(&pattern).await?;
-    if entities.len() > 1 {
-        Entity::view(entities);
-        anyhow::bail!("Too many entities");
-    }
-    if let Some(entity) = entities.pop() {
+    let same = if let Some(first) = entities.first() {
+        entities.iter().all(|e| e.hash() == first.hash())
+    } else {
+        true
+    };
+    if let Some(entity) = entities.pop()
+        && same
+    {
         entity.delete(&repository).await?;
     };
 
