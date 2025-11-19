@@ -13,7 +13,7 @@ impl Config {
         } else {
             // Production environment
             web_sys::console::log_1(&"Config: Using production API URL https://api.0ae.ru".into());
-            "https://api.0ae.ru".to_string()
+            "https://api.lab.0ae.ru".to_string()
         };
 
         Self { api_base_url }
