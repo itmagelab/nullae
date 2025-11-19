@@ -118,7 +118,7 @@ pub fn body() -> Html {
                 <input
                     ref={input_ref.clone()}
                     type="text"
-                    placeholder="Type something..."
+                    placeholder="Type url..."
                     class="border border-gray-300 rounded-l px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     onkeydown={onkeydown}
                 />
