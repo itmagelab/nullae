@@ -1,6 +1,7 @@
 use web_sys::{HtmlInputElement, KeyboardEvent, MouseEvent};
 use yew::prelude::*;
 
+use crate::config::Config;
 use crate::handler;
 
 #[function_component(Header)]
@@ -19,6 +20,7 @@ pub fn body() -> Html {
     let response_state = use_state(|| None::<String>);
     let loading_state = use_state(|| false);
     let copy_state = use_state(|| false);
+    let config = Config::new();
 
     let on_submit = {
         let input_ref = input_ref.clone();
@@ -42,7 +44,7 @@ pub fn body() -> Html {
                         response_state.set(Some(msg));
                         copy_state.set(false);
                     } else {
-                        let api_url = "http://localhost:3000/api/v1/short".to_string();
+                        let api_url = config.api_url("/api/v1/short");
 
                         loading_state.set(true);
                         response_state.set(None);

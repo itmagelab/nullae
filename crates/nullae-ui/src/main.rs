@@ -1,3 +1,4 @@
+mod config;
 mod handler;
 mod html;
 
