@@ -3,7 +3,6 @@ pub mod node;
 pub mod url;
 
 use crate::prelude::*;
-use std::collections::HashMap;
 
 use crate::{BASE_PATH, SHORT_HASH};
 use serde::{Deserialize, Serialize};
@@ -103,66 +102,29 @@ impl Entity {
     }
 
     pub fn view(vec: Vec<Self>) {
-        let map = group_entities(vec);
+        let mut nodes = Vec::new();
+        let mut domains = Vec::new();
+        let mut urls = Vec::new();
 
-        for (key, items) in map {
-            let title = key;
-            match key {
-                "Node" => {
-                    let nodes = extract_inner(items, Entity::into_inner_node);
-                    Node::view(nodes, title);
-                }
-                "Domain" => {
-                    let domains = extract_inner(items, Entity::into_inner_domain);
-                    Domain::view(domains, title);
-                }
-                "Url" => {
-                    let urls = extract_inner(items, Entity::into_inner_url);
-                    Url::view(urls, title);
-                }
-                _ => todo!(),
+        for entity in vec {
+            match entity.kind {
+                EntityKind::Node { inner } => nodes.push(inner),
+                EntityKind::Domain { inner } => domains.push(inner),
+                EntityKind::Url { inner } => urls.push(inner),
             }
         }
-    }
 
-    fn into_inner_url(self) -> Option<Url> {
-        if let EntityKind::Url { inner, .. } = self.kind {
-            Some(inner)
-        } else {
-            None
+        if !nodes.is_empty() {
+            Node::view(nodes, "Node");
+        }
+        if !domains.is_empty() {
+            Domain::view(domains, "Domain");
+        }
+        if !urls.is_empty() {
+            Url::view(urls, "Url");
         }
     }
 
-    fn into_inner_node(self) -> Option<Node> {
-        if let EntityKind::Node { inner, .. } = self.kind {
-            Some(inner)
-        } else {
-            None
-        }
-    }
-
-    fn into_inner_domain(self) -> Option<Domain> {
-        if let EntityKind::Domain { inner, .. } = self.kind {
-            Some(inner)
-        } else {
-            None
-        }
-    }
-}
-
-fn extract_inner<T, F>(entities: Vec<Entity>, f: F) -> Vec<T>
-where
-    F: Fn(Entity) -> Option<T>,
-{
-    entities.into_iter().filter_map(f).collect()
-}
-
-fn group_entities(entities: Vec<Entity>) -> HashMap<&'static str, Vec<Entity>> {
-    let mut map: HashMap<&'static str, Vec<Entity>> = HashMap::new();
-    for e in entities {
-        map.entry(e.type_name()).or_default().push(e);
-    }
-    map
 }
 
 pub trait EntityItem {
