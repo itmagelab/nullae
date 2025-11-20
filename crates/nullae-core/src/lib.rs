@@ -5,7 +5,6 @@ pub mod prelude;
 pub mod repository;
 
 use crate::{index::Index, prelude::Repository};
-use base64::{Engine, prelude::BASE64_STANDARD};
 use serde::{Deserialize, Serialize};
 
 pub(crate) const BASE_PATH: &str = "0ae";
@@ -58,49 +57,6 @@ pub trait Indexable {
     fn index(&self) -> anyhow::Result<Index>;
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "PascalCase")]
-pub struct Record {
-    create_index: usize,
-    flags: usize,
-    key: String,
-    lock_index: usize,
-    modify_index: usize,
-    value: String,
-}
-
-impl Record {
-    pub fn create_index(&self) -> usize {
-        self.create_index
-    }
-
-    pub fn flags(&self) -> usize {
-        self.flags
-    }
-
-    pub fn key(&self) -> &str {
-        &self.key
-    }
-
-    pub fn lock_index(&self) -> usize {
-        self.lock_index
-    }
-
-    pub fn modify_index(&self) -> usize {
-        self.modify_index
-    }
-
-    pub fn value_as_slice(&self) -> Result<Vec<u8>, anyhow::Error> {
-        let value = BASE64_STANDARD.decode(&self.value)?;
-        Ok(value)
-    }
-
-    pub fn value(&self) -> Result<serde_json::Value, anyhow::Error> {
-        let value = self.value_as_slice()?;
-        let value: serde_json::Value = serde_json::from_slice(&value.to_vec())?;
-        Ok(value)
-    }
-}
 
 #[cfg(test)]
 mod tests {

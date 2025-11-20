@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{BASE_PATH, Indexable, Repository, entity::Entity};
-use crate::{Record, prelude::*};
+use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
