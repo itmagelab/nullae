@@ -43,6 +43,8 @@ pub struct Cli {
 
 #[tokio::main]
 pub async fn main() {
+    dotenvy::dotenv().ok();
+
     fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .compact()
