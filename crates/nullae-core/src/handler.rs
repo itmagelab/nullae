@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-pub async fn auto(domain: String) -> Result<(), anyhow::Error> {
+pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
     let repository = Repository::new().unwrap();
     let domain = Domain::new(&domain).save(&repository).await?;
     let node = Node::from_current_host(&domain, &repository).await?;
@@ -35,9 +35,9 @@ pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn show(hash: String) -> Result<(), anyhow::Error> {
+pub async fn show(pattern: String) -> Result<(), anyhow::Error> {
     let repository = Repository::new().unwrap();
-    let entities = repository.find(&hash).await?;
+    let entities = repository.find(&pattern).await?;
     for entity in entities {
         println!("{}", entity)
     }
