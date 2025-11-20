@@ -68,6 +68,8 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
+        dotenvy::dotenv().ok();
+
         let repository = Repository::new().unwrap();
         let url = Url::create("https://ya.ru/some?param=1", &repository)
             .await

@@ -57,13 +57,14 @@ pub trait Indexable {
     fn index(&self) -> anyhow::Result<Index>;
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::prelude::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn it_works_async() {
+        dotenvy::dotenv().ok();
+
         use futures::stream::{self, StreamExt};
 
         let repository = Repository::new().unwrap();
