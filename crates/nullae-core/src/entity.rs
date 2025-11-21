@@ -36,9 +36,9 @@ pub struct Entity {
 impl std::fmt::Display for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
-            EntityKind::Node { inner, .. } => write!(f, "{}", inner),
-            EntityKind::Domain { inner, .. } => write!(f, "{}", inner),
-            EntityKind::Url { inner, .. } => write!(f, "{}", inner),
+            EntityKind::Node { inner } => write!(f, "{}", inner),
+            EntityKind::Domain { inner } => write!(f, "{}", inner),
+            EntityKind::Url { inner } => write!(f, "{}", inner),
         }
     }
 }
@@ -60,18 +60,18 @@ impl Entity {
         };
     }
 
-    pub fn has_chindren(&self) -> bool {
+    pub fn has_children(&self) -> bool {
         self.metadata.children.is_some()
     }
 
     pub async fn delete(self, repository: &Repository) -> anyhow::Result<()> {
-        if self.has_chindren() {
+        if self.has_children() {
             anyhow::bail!("Can't delete entity with children");
-        };
+        }
         match self.kind {
-            EntityKind::Node { inner, .. } => inner.delete(repository).await?,
+            EntityKind::Node { inner } => inner.delete(repository).await?,
             _ => repository.delete(&self).await?,
-        };
+        }
         Ok(())
     }
 
@@ -79,18 +79,16 @@ impl Entity {
         Ok(serde_json::to_value(self)?)
     }
 
-    pub(crate) fn hash(&self) -> String {
+    pub(crate) fn hash(&self) -> &str {
         match &self.kind {
-            EntityKind::Node { inner, .. } => inner.hash.clone(),
-            EntityKind::Domain { inner, .. } => inner.hash.clone(),
-            EntityKind::Url { inner, .. } => inner.hash.clone(),
+            EntityKind::Node { inner } => &inner.hash,
+            EntityKind::Domain { inner } => &inner.hash,
+            EntityKind::Url { inner } => &inner.hash,
         }
     }
 
     pub(crate) fn path(&self) -> String {
-        let id = self.hash();
-        let path = format!("{BASE_PATH}/entity");
-        format!("{path}/{id}")
+        format!("{BASE_PATH}/entity/{}", self.hash())
     }
 
     pub fn type_name(&self) -> &'static str {
@@ -124,7 +122,6 @@ impl Entity {
             Url::view(urls, "Url");
         }
     }
-
 }
 
 pub trait EntityItem {
