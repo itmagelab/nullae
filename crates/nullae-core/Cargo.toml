@@ -28,3 +28,5 @@ nullae-macros.workspace = true
 futures = "0.3.31"
 url.workspace = true
 dotenvy.workspace = true
+sysinfo = "0.31"
+local-ip-address = "0.6"
