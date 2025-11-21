@@ -38,17 +38,26 @@ impl EntityItem for Domain {
 }
 
 impl Domain {
-    pub fn new<S>(name: S) -> Self
+    pub fn new<S>(name: S) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
         let name = name.into();
+        
+        if name.trim().is_empty() {
+            anyhow::bail!("Domain name cannot be empty or whitespace-only");
+        }
+        
+        if name.len() > 255 {
+            anyhow::bail!("Domain name cannot exceed 255 characters, got: {}", name.len());
+        }
+        
         let hash = format!("{}|", &name).hash();
-        Self {
+        Ok(Self {
             hash,
             name,
             ..Default::default()
-        }
+        })
     }
 
     pub async fn get(hash: &str, repository: &Repository) -> anyhow::Result<Self> {
@@ -60,7 +69,7 @@ impl Domain {
     }
 
     pub async fn create(name: &str, repository: &Repository) -> anyhow::Result<Self> {
-        let domain = Self::new(name);
+        let domain = Self::new(name)?;
         if let Ok(domain) = Domain::get(&domain.hash, repository).await {
             return Ok(domain);
         };

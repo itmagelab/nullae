@@ -45,19 +45,32 @@ impl EntityItem for Node {
 }
 
 impl Node {
-    pub fn new<S>(hostname: S, domain: S) -> Self
+    pub fn new<S>(hostname: S, domain: S) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
         let hostname = hostname.into();
         let domain = domain.into();
+        
+        if hostname.trim().is_empty() {
+            anyhow::bail!("Node hostname cannot be empty or whitespace-only");
+        }
+        
+        if domain.trim().is_empty() {
+            anyhow::bail!("Node domain cannot be empty or whitespace-only");
+        }
+        
+        if hostname.len() > 255 {
+            anyhow::bail!("Node hostname cannot exceed 255 characters, got: {}", hostname.len());
+        }
+        
         let hash = format!("{}|{}", &hostname, &domain).hash();
-        Self {
+        Ok(Self {
             hostname,
             domain,
             hash,
             ..Default::default()
-        }
+        })
     }
 
     pub async fn from_current_host(
@@ -73,7 +86,7 @@ impl Node {
         domain: &Domain,
         repository: &Repository,
     ) -> anyhow::Result<Self> {
-        let node = Self::new(name, &domain.hash);
+        let node = Self::new(name, &domain.hash)?;
         let domain = Domain::get(&domain.hash, repository).await?;
         let mut domain_entity: Entity = domain.into();
         domain_entity.add_child(&node.hash);

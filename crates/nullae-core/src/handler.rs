@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
     let repository = Repository::new()?;
-    let domain = Domain::new(&domain).save(&repository).await?;
+    let domain = Domain::new(&domain)?.save(&repository).await?;
     let node = Node::from_current_host(&domain, &repository).await?;
     node.index()?.save(&repository).await?;
 

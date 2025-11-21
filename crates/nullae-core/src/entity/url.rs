@@ -32,10 +32,21 @@ impl EntityItem for Url {
 
 impl Url {
     fn new(url: &str) -> anyhow::Result<Self> {
+        if url.trim().is_empty() {
+            anyhow::bail!("URL cannot be empty or whitespace-only");
+        }
+        
+        let parsed_url = url::Url::parse(url)
+            .map_err(|e| anyhow::anyhow!("Invalid URL format '{}': {}", url, e))?;
+        
         let hash = format!("{}|", url).hash();
         let slug = hash[..SHORT_HASH].to_string();
-        let url = url::Url::parse(url)?;
-        Ok(Self { hash, slug, url })
+        
+        Ok(Self { 
+            hash, 
+            slug, 
+            url: parsed_url 
+        })
     }
 
     pub async fn create(name: &str, repository: &Repository) -> anyhow::Result<Self> {
