@@ -3,8 +3,6 @@ use tabled::Tabled;
 
 use crate::{SHORT_HASH, entity::EntityItem, prelude::*};
 
-const DOMAIN: &str = "https://0ae.ru";
-
 #[derive(Serialize, Deserialize, Debug, Tabled, Indexable, Entity)]
 pub struct Url {
     pub(crate) hash: String,
@@ -56,9 +54,11 @@ impl Url {
         self.url.to_string()
     }
 
-    pub fn short_url(&self) -> String {
+    pub fn short_url(&self) -> anyhow::Result<String> {
+        let domain = std::env::var("NULLAE_DOMAIN")
+            .map_err(|_| anyhow::anyhow!("NULLAE_DOMAIN environment variable is required"))?;
         let slug = &self.slug;
-        format!("{DOMAIN}/{slug}")
+        Ok(format!("{domain}/{slug}"))
     }
 }
 

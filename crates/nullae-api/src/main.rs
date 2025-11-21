@@ -40,7 +40,7 @@ async fn shorten(Json(payload): Json<ShortenRequest>) -> Result<Json<ShortenResp
 
 async fn shorten_handler(url: &str) -> anyhow::Result<String> {
     let repository = Repository::new()?;
-    let url = Url::create(url, &repository).await?.short_url();
+    let url = Url::create(url, &repository).await?.short_url()?;
     Ok(url)
 }
 

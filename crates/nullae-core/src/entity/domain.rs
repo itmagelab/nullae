@@ -17,7 +17,10 @@ pub struct Domain {
 
 impl std::fmt::Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let desc = self.description.as_deref().unwrap_or(&self.name);
+        let desc = match &self.description {
+            Some(d) => d.as_str(),
+            None => &self.name,
+        };
         writeln!(f, "Domain ➤ {}", desc)?;
         writeln!(f, "  → Hash: {}", self.hash)?;
         writeln!(f, "  → Name: {}", self.name)

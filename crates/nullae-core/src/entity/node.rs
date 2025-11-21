@@ -23,7 +23,10 @@ fn short_hash(hash: &str, _: &Node) -> String {
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let desc = self.description.as_deref().unwrap_or(&self.hostname);
+        let desc = match &self.description {
+            Some(d) => d.as_str(),
+            None => &self.hostname,
+        };
         writeln!(f, "Node ➤ {}", desc)?;
         writeln!(f, "  → Hostname: {}", self.hostname)?;
         writeln!(f, "  → Domain: {}", self.domain)?;
