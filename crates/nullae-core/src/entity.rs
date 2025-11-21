@@ -64,13 +64,24 @@ impl Entity {
         self.metadata.children.is_some()
     }
 
-    pub async fn delete(self, repository: &Repository) -> anyhow::Result<()> {
+    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
         if self.has_children() {
             anyhow::bail!("Can't delete entity with children");
         }
+        
+        // Get index before deleting entity
+        let index = Index::from_entity(&self)?;
+        
         match self.kind {
-            EntityKind::Node { inner } => inner.delete(repository).await?,
-            _ => repository.delete(&self).await?,
+            EntityKind::Node { inner } => inner.delete(ctx).await?,
+            _ => {
+                // Delete entity from repository
+                let url = ctx.repository().build_url(&self.path());
+                ctx.repository().pool.delete(&url).send().await?;
+                
+                // Purge index entries
+                index.purge(ctx).await?;
+            }
         }
         Ok(())
     }

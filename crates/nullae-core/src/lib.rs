@@ -1,10 +1,11 @@
 pub(crate) mod entity;
+pub mod context;
 pub mod handler;
 pub(crate) mod index;
 pub mod prelude;
 pub mod repository;
 
-use crate::{index::Index, prelude::Repository};
+use crate::index::Index;
 use serde::{Deserialize, Serialize};
 
 pub(crate) const BASE_PATH: &str = "0ae";
@@ -67,19 +68,19 @@ mod tests {
 
         use futures::stream::{self, StreamExt};
 
-        let repository = Repository::new().unwrap();
+        let ctx = Context::new().unwrap();
         let count = 100;
 
-        let domain = Domain::create("async", &repository).await.unwrap();
+        let domain = Domain::create("async", &ctx).await.unwrap();
 
         let start_creation = std::time::Instant::now();
         let nodes: Vec<Node> = stream::iter(0..count)
             .map(|i| {
-                let repository = &repository;
+                let ctx = &ctx;
                 let domain = domain.clone();
                 async move {
                     let node_name = format!("node-{}", i);
-                    Node::create_with_index(&node_name, &domain, repository)
+                    Node::create_with_index(&node_name, &domain, ctx)
                         .await
                         .unwrap()
                 }
@@ -93,9 +94,9 @@ mod tests {
         let start_creation = std::time::Instant::now();
         stream::iter(nodes)
             .map(|node| {
-                let repository = &repository;
+                let ctx = &ctx;
                 async move {
-                    node.delete(repository).await.unwrap();
+                    node.delete(ctx).await.unwrap();
                 }
             })
             .buffer_unordered(100)
@@ -104,6 +105,6 @@ mod tests {
         let duration_creation = start_creation.elapsed();
         println!("Deletion time {} Node: {:?}", count, duration_creation);
 
-        domain.delete(&repository).await.unwrap();
+        domain.delete(&ctx).await.unwrap();
     }
 }

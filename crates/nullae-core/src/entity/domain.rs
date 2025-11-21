@@ -60,30 +60,30 @@ impl Domain {
         })
     }
 
-    pub async fn get(hash: &str, repository: &Repository) -> anyhow::Result<Self> {
-        let domains = repository.find_by_hash(hash).await?;
+    pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
+        let domains = ctx.repository().find_by_hash(hash).await?;
         let Some(entity) = domains else {
             anyhow::bail!("Can't find domain for hash: {}", hash);
         };
         entity.try_into()
     }
 
-    pub async fn create(name: &str, repository: &Repository) -> anyhow::Result<Self> {
+    pub async fn create(name: &str, ctx: &Context) -> anyhow::Result<Self> {
         let domain = Self::new(name)?;
-        if let Ok(domain) = Domain::get(&domain.hash, repository).await {
+        if let Ok(domain) = Domain::get(&domain.hash, ctx).await {
             return Ok(domain);
         };
-        domain.save(repository).await
+        domain.save(ctx).await
     }
 
-    pub async fn save(self, repository: &Repository) -> anyhow::Result<Self> {
-        self.index()?.save(repository).await?;
-        repository.create(&self.into()).await?.try_into()
+    pub async fn save(self, ctx: &Context) -> anyhow::Result<Self> {
+        self.index()?.save(ctx).await?;
+        ctx.repository().create(&self.into()).await?.try_into()
     }
 
-    pub async fn delete(self, repository: &Repository) -> anyhow::Result<()> {
+    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
         let entity: Entity = self.into();
-        entity.delete(repository).await?;
+        entity.delete(ctx).await?;
         Ok(())
     }
 }

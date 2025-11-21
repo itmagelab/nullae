@@ -1,3 +1,4 @@
+pub use crate::context::Context;
 pub use crate::entity::{Entity, EntityKind, domain::Domain, node::Node, url::Url};
 pub use crate::index::{Index, Item};
 pub use crate::repository::Repository;

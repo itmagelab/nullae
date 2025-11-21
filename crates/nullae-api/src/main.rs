@@ -39,8 +39,8 @@ async fn shorten(Json(payload): Json<ShortenRequest>) -> Result<Json<ShortenResp
 }
 
 async fn shorten_handler(url: &str) -> anyhow::Result<String> {
-    let repository = Repository::new()?;
-    let url = Url::create(url, &repository).await?.short_url()?;
+    let ctx = Context::new()?;
+    let url = Url::create(url, &ctx).await?.short_url()?;
     Ok(url)
 }
 
@@ -60,8 +60,8 @@ async fn redirect(
 }
 
 async fn redirect_handler(hash: &str) -> anyhow::Result<String> {
-    let repository = Repository::new()?;
-    let original_url = if let Some(entity) = repository.find_by_slug(hash).await? {
+    let ctx = Context::new()?;
+    let original_url = if let Some(entity) = ctx.repository().find_by_slug(hash).await? {
         let EntityKind::Url { inner, .. } = entity.kind else {
             anyhow::bail!("Invalid URL entity");
         };

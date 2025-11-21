@@ -53,7 +53,7 @@ impl Repository {
         Ok(Self { url, pool })
     }
 
-    fn build_url(&self, path: &str) -> String {
+    pub(crate) fn build_url(&self, path: &str) -> String {
         format!("{}/v1/kv/{}", self.url, path)
     }
 
@@ -102,16 +102,6 @@ impl Repository {
         let url = self.build_url(&entity.path());
 
         Ok(self.get_by_url(url).await?.pop())
-    }
-
-    pub async fn delete(&self, entity: &Entity) -> anyhow::Result<()> {
-        let url = self.build_url(&entity.path());
-        let index = Index::from_entity(entity)?;
-
-        self.pool.delete(&url).send().await?;
-
-        index.purge(self).await?;
-        Ok(())
     }
 
     pub async fn find_by_entity(&self, hash: &str) -> anyhow::Result<Vec<Entity>> {

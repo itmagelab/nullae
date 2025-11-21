@@ -49,15 +49,15 @@ impl Url {
         })
     }
 
-    pub async fn create(name: &str, repository: &Repository) -> anyhow::Result<Self> {
+    pub async fn create(name: &str, ctx: &Context) -> anyhow::Result<Self> {
         let url = Self::new(name)?;
-        url.index()?.save(repository).await?;
-        repository.create(&url.into()).await?.try_into()
+        url.index()?.save(ctx).await?;
+        ctx.repository().create(&url.into()).await?.try_into()
     }
 
-    pub async fn delete(self, repository: &Repository) -> anyhow::Result<()> {
+    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
         let entity: Entity = self.into();
-        entity.delete(repository).await?;
+        entity.delete(ctx).await?;
         Ok(())
     }
 
@@ -81,10 +81,10 @@ mod tests {
     async fn it_works() {
         dotenvy::dotenv().ok();
 
-        let repository = Repository::new().unwrap();
-        let url = Url::create("https://ya.ru/some?param=1", &repository)
+        let ctx = Context::new().unwrap();
+        let url = Url::create("https://ya.ru/some?param=1", &ctx)
             .await
             .unwrap();
-        url.delete(&repository).await.unwrap();
+        url.delete(&ctx).await.unwrap();
     }
 }

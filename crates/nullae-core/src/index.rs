@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{BASE_PATH, Indexable, Repository, entity::Entity};
+use crate::{BASE_PATH, Indexable, entity::Entity};
 use crate::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -98,11 +98,11 @@ impl Index {
         }
     }
 
-    pub(crate) async fn save(self, repository: &Repository) -> anyhow::Result<()> {
+    pub(crate) async fn save(self, ctx: &Context) -> anyhow::Result<()> {
         for mut new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", repository.url, new_item.path());
+            let url = format!("{}/v1/kv/{}", ctx.repository().url, new_item.path());
 
-            let Ok(rs) = repository.pool.get(&url).send().await else {
+            let Ok(rs) = ctx.repository().pool.get(&url).send().await else {
                 anyhow::bail!("Got response ERROR");
             };
 
@@ -121,7 +121,7 @@ impl Index {
                 new_item.merge(saved_item);
             };
 
-            repository
+            ctx.repository()
                 .pool
                 .put(&url)
                 .json(&new_item.payload()?)
@@ -132,10 +132,10 @@ impl Index {
         Ok(())
     }
 
-    pub(crate) async fn purge(self, repository: &Repository) -> anyhow::Result<()> {
+    pub(crate) async fn purge(self, ctx: &Context) -> anyhow::Result<()> {
         for new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", repository.url, new_item.path());
-            let rs = repository.pool.get(&url).send().await?;
+            let url = format!("{}/v1/kv/{}", ctx.repository().url, new_item.path());
+            let rs = ctx.repository().pool.get(&url).send().await?;
 
             if !rs.status().is_success() {
                 continue;
@@ -150,10 +150,10 @@ impl Index {
             saved.subtract(new_item);
 
             if saved.is_empty() {
-                repository.pool.delete(&url).send().await?;
+                ctx.repository().pool.delete(&url).send().await?;
             } else {
                 let payload = saved.payload()?;
-                repository.pool.put(&url).json(&payload).send().await?;
+                ctx.repository().pool.put(&url).json(&payload).send().await?;
             }
         }
 
