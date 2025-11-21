@@ -35,17 +35,17 @@ impl Url {
         if url.trim().is_empty() {
             anyhow::bail!("URL cannot be empty or whitespace-only");
         }
-        
+
         let parsed_url = url::Url::parse(url)
             .map_err(|e| anyhow::anyhow!("Invalid URL format '{}': {}", url, e))?;
-        
+
         let hash = format!("{}|", url).hash();
         let slug = hash[..SHORT_HASH].to_string();
-        
-        Ok(Self { 
-            hash, 
-            slug, 
-            url: parsed_url 
+
+        Ok(Self {
+            hash,
+            slug,
+            url: parsed_url,
         })
     }
 

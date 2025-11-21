@@ -163,6 +163,7 @@ impl Repository {
     }
 
     async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>> {
+        // 1. Get index with UUIDs
         let url = self.build_url(&format!("{BASE_PATH}/index/{}/{}", index, pattern));
 
         let rs = self.pool.get(&url).send().await?;
@@ -176,19 +177,32 @@ impl Repository {
         };
 
         let item: Item = serde_json::from_value(record.value()?)?;
+        let uuids: std::collections::HashSet<String> = item.value().into_iter().collect();
 
-        let mut entities = Vec::new();
-        for uuid in item.value() {
-            let url = self.build_url(&format!("{BASE_PATH}/entity/{}", uuid));
-            let mut records: Vec<Record> = self.pool.get(&url).send().await?.json().await?;
+        // 2. Fetch all entities in one batch request
+        let url = self.build_url(&format!("{BASE_PATH}/entity"));
+        let rs = self
+            .pool
+            .get(&url)
+            .query(&serde_json::json!({"recurse": true}))
+            .send()
+            .await?;
 
-            let Some(record) = records.pop() else {
-                continue;
-            };
-
-            let entity = serde_json::from_value::<Entity>(record.value()?)?;
-            entities.push(entity);
+        if !rs.status().is_success() {
+            return Ok(vec![]);
         }
+
+        // 3. Filter entities by UUIDs from index
+        let entities: Vec<Entity> = rs
+            .json::<Vec<Record>>()
+            .await?
+            .into_iter()
+            .filter_map(|r| {
+                r.into_entity()
+                    .ok()
+                    .filter(|e| uuids.contains(e.hash() as &str))
+            })
+            .collect();
 
         Ok(entities)
     }

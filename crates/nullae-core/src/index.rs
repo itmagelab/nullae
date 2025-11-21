@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::{BASE_PATH, Indexable, entity::Entity};
 use crate::prelude::*;
+use crate::{BASE_PATH, Indexable, entity::Entity};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,6 +43,24 @@ pub struct Item {
 }
 
 impl Item {
+    /// Creates a new Item from references, avoiding unnecessary cloning
+    pub fn new(kind: &str, key: &str, hash: &str) -> anyhow::Result<Self> {
+        let kind = match kind {
+            "hostname" => ItemKind::Hostname,
+            "name" => ItemKind::Name,
+            "short_hash" => ItemKind::ShortHash,
+            "slug" => ItemKind::Slug,
+            _ => anyhow::bail!("Unknown item kind: {}", kind),
+        };
+
+        let data = ItemData {
+            key: key.to_string(),
+            value: vec![hash.to_string()],
+        };
+
+        Ok(Self { kind, data })
+    }
+
     fn path(&self) -> String {
         let kind = self.kind.as_str();
         let key = &self.data.key;
@@ -153,7 +171,12 @@ impl Index {
                 ctx.repository().pool.delete(&url).send().await?;
             } else {
                 let payload = saved.payload()?;
-                ctx.repository().pool.put(&url).json(&payload).send().await?;
+                ctx.repository()
+                    .pool
+                    .put(&url)
+                    .json(&payload)
+                    .send()
+                    .await?;
             }
         }
 

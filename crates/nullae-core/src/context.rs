@@ -9,9 +9,9 @@ pub struct Context {
 
 impl Context {
     /// Creates a new Context with initialized Repository.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Returns an error if:
     /// - Required environment variables are not set (NULLAE_CONSUL_URL)
     /// - Repository initialization fails

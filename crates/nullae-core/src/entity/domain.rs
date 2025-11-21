@@ -43,15 +43,18 @@ impl Domain {
         S: Into<String>,
     {
         let name = name.into();
-        
+
         if name.trim().is_empty() {
             anyhow::bail!("Domain name cannot be empty or whitespace-only");
         }
-        
+
         if name.len() > 255 {
-            anyhow::bail!("Domain name cannot exceed 255 characters, got: {}", name.len());
+            anyhow::bail!(
+                "Domain name cannot exceed 255 characters, got: {}",
+                name.len()
+            );
         }
-        
+
         let hash = format!("{}|", &name).hash();
         Ok(Self {
             hash,

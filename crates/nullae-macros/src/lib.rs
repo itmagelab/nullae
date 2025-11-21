@@ -31,9 +31,7 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
             fn index(&self) -> anyhow::Result<Index> {
                 let mut index = Index::new();
                 #(
-                    let data = serde_json::json!({"key": self.#field_idents.clone(), "value": vec![self.hash.clone()]});
-                    let item_json = serde_json::json!({"kind": #field_names, "data": data});
-                    let item: Item = serde_json::from_value(item_json)?;
+                    let item = Item::new(#field_names, &self.#field_idents, &self.hash)?;
                     index.push(item);
                 )*
                 Ok(index)

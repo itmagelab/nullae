@@ -1,5 +1,5 @@
-pub(crate) mod entity;
 pub mod context;
+pub(crate) mod entity;
 pub mod handler;
 pub(crate) mod index;
 pub mod prelude;
@@ -63,48 +63,56 @@ mod tests {
     use super::prelude::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-    async fn it_works_async() {
+    async fn random_nodes_domains() {
         dotenvy::dotenv().ok();
 
         use futures::stream::{self, StreamExt};
 
         let ctx = Context::new().unwrap();
-        let count = 100;
 
-        let domain = Domain::create("async", &ctx).await.unwrap();
-
-        let start_creation = std::time::Instant::now();
-        let nodes: Vec<Node> = stream::iter(0..count)
+        // Create 5 different domains
+        let domains: Vec<Domain> = stream::iter(0..5)
             .map(|i| {
                 let ctx = &ctx;
-                let domain = domain.clone();
+                async move { Domain::create(&format!("domain-{}", i), ctx).await.unwrap() }
+            })
+            .buffer_unordered(5)
+            .collect()
+            .await;
+
+        // Create 100 nodes randomly distributed across domains
+        let nodes: Vec<Node> = stream::iter(0..100)
+            .map(|i| {
+                let ctx = &ctx;
+                let domain = domains[i % 5].clone(); // Round-robin distribution
                 async move {
-                    let node_name = format!("node-{}", i);
-                    Node::create_with_index(&node_name, &domain, ctx)
+                    Node::create(&format!("node-{}", i), &domain, ctx)
                         .await
                         .unwrap()
                 }
             })
-            .buffer_unordered(100)
+            .buffer_unordered(50)
             .collect()
             .await;
-        let duration_creation = start_creation.elapsed();
-        println!("Creation time {} Node: {:?}", count, duration_creation);
 
-        let start_creation = std::time::Instant::now();
+        // Cleanup: delete all nodes
         stream::iter(nodes)
             .map(|node| {
                 let ctx = &ctx;
-                async move {
-                    node.delete(ctx).await.unwrap();
-                }
+                async move { node.delete(ctx).await.unwrap() }
             })
-            .buffer_unordered(100)
+            .buffer_unordered(50)
             .collect::<()>()
             .await;
-        let duration_creation = start_creation.elapsed();
-        println!("Deletion time {} Node: {:?}", count, duration_creation);
 
-        domain.delete(&ctx).await.unwrap();
+        // Cleanup: delete all domains
+        stream::iter(domains)
+            .map(|domain| {
+                let ctx = &ctx;
+                async move { domain.delete(ctx).await.unwrap() }
+            })
+            .buffer_unordered(5)
+            .collect::<()>()
+            .await;
     }
 }
