@@ -23,20 +23,19 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
         }
     }
 
+
     let field_names: Vec<_> = field_idents.iter().map(|i| i.to_string()).collect();
 
     let expanded = quote! {
         impl Indexable for #name {
             fn index(&self) -> anyhow::Result<Index> {
                 let mut index = Index::new();
-                let mut map = std::collections::HashMap::new();
-                #( map.insert(#field_names, self.#field_idents.clone()); )*
-                for (key, value) in map {
-                    let data = serde_json::json!({"key": value, "value": vec![self.hash.clone()]});
-                    let item_json = serde_json::json!({"kind": key, "data": data});
-                    let item: Item = serde_json::from_value(item_json).unwrap();
+                #(
+                    let data = serde_json::json!({"key": self.#field_idents.clone(), "value": vec![self.hash.clone()]});
+                    let item_json = serde_json::json!({"kind": #field_names, "data": data});
+                    let item: Item = serde_json::from_value(item_json)?;
                     index.push(item);
-                };
+                )*
                 Ok(index)
             }
         }
@@ -68,7 +67,7 @@ pub fn entity(input: TokenStream) -> TokenStream {
             type Error = anyhow::Error;
 
             fn try_from(entity: Entity) -> Result<Self, Self::Error> {
-                if let EntityKind::#variant_name { inner, .. } = entity.kind {
+                if let EntityKind::#variant_name { inner } = entity.kind {
                     Ok(inner)
                 } else {
                     anyhow::bail!("Invalid entity type, expected {}", stringify!(#variant_name))
