@@ -82,6 +82,7 @@ impl Index {
         match &entity.kind {
             EntityKind::Node { inner, .. } => inner.index(),
             EntityKind::Domain { inner, .. } => inner.index(),
+            EntityKind::Ip { inner, .. } => inner.index(),
             EntityKind::Url { inner, .. } => inner.index(),
         }
     }

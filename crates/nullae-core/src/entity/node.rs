@@ -22,8 +22,8 @@ pub struct Node {
     #[tabled(display("display::option", ""))]
     #[index]
     pub(crate) arch: Option<String>,
-    #[tabled(display("display::option", ""))]
-    pub(crate) ip_address: Option<String>,
+    #[tabled(display("display_short_hash_option"))]
+    pub(crate) ip: Option<String>,
     #[tabled(display("display::option", ""))]
     pub(crate) cpu_cores: Option<usize>,
     #[tabled(display("display::option", ""))]
@@ -62,6 +62,19 @@ fn short_hash(hash: &str, _: &Node) -> String {
     hash[..SHORT_HASH].to_string()
 }
 
+fn display_short_hash_option(hash: &Option<String>) -> String {
+    match hash {
+        Some(h) => {
+            if h.len() > SHORT_HASH {
+                h[..SHORT_HASH].to_string()
+            } else {
+                h.to_string()
+            }
+        }
+        None => String::new(),
+    }
+}
+
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let desc = match &self.description {
@@ -82,7 +95,7 @@ impl std::fmt::Display for Node {
                 writeln!(f)?;
             }
         }
-        if let Some(ip) = &self.ip_address {
+        if let Some(ip) = &self.ip {
             writeln!(f, "  → IP: {}", ip)?;
         }
         if let Some(cores) = self.cpu_cores {
@@ -171,15 +184,19 @@ impl Node {
     }
 
     /// Collects information about the current host
-    pub fn collect_host_info(&mut self) -> anyhow::Result<()> {
+    pub async fn collect_host_info(&mut self, ctx: &Context) -> anyhow::Result<()> {
         use sysinfo::System;
 
         // OS information
         self.os_type = Some(std::env::consts::OS.to_string());
         self.arch = Some(std::env::consts::ARCH.to_string());
 
-        // IP address
-        self.ip_address = local_ip_address::local_ip().ok().map(|ip| ip.to_string());
+        // IP address - create Ip entity and store its hash
+        if let Ok(local_ip) = local_ip_address::local_ip() {
+            let ip_str = local_ip.to_string();
+            let ip = Ip::create(&ip_str, ctx).await?;
+            self.ip = Some(ip.hash);
+        }
 
         // System information
         let mut sys = System::new_all();

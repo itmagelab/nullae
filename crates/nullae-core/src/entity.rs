@@ -1,4 +1,5 @@
 pub mod domain;
+pub mod ip;
 pub mod node;
 pub mod url;
 
@@ -22,6 +23,7 @@ use crate::Metadata;
 pub enum EntityKind {
     Node { inner: Node },
     Domain { inner: Domain },
+    Ip { inner: Ip },
     Url { inner: Url },
 }
 
@@ -38,6 +40,7 @@ impl std::fmt::Display for Entity {
         match &self.kind {
             EntityKind::Node { inner } => write!(f, "{}", inner),
             EntityKind::Domain { inner } => write!(f, "{}", inner),
+            EntityKind::Ip { inner } => write!(f, "{}", inner),
             EntityKind::Url { inner } => write!(f, "{}", inner),
         }
     }
@@ -94,6 +97,7 @@ impl Entity {
         match &self.kind {
             EntityKind::Node { inner } => &inner.hash,
             EntityKind::Domain { inner } => &inner.hash,
+            EntityKind::Ip { inner } => &inner.hash,
             EntityKind::Url { inner } => &inner.hash,
         }
     }
@@ -106,6 +110,7 @@ impl Entity {
         match self.kind {
             EntityKind::Node { .. } => "Node",
             EntityKind::Domain { .. } => "Domain",
+            EntityKind::Ip { .. } => "Ip",
             EntityKind::Url { .. } => "Url",
         }
     }
@@ -113,12 +118,14 @@ impl Entity {
     pub fn view(vec: Vec<Self>) {
         let mut nodes = Vec::new();
         let mut domains = Vec::new();
+        let mut ips = Vec::new();
         let mut urls = Vec::new();
 
         for entity in vec {
             match entity.kind {
                 EntityKind::Node { inner } => nodes.push(inner),
                 EntityKind::Domain { inner } => domains.push(inner),
+                EntityKind::Ip { inner } => ips.push(inner),
                 EntityKind::Url { inner } => urls.push(inner),
             }
         }
@@ -128,6 +135,9 @@ impl Entity {
         }
         if !domains.is_empty() {
             Domain::view(domains, "Domain");
+        }
+        if !ips.is_empty() {
+            Ip::view(ips, "Ip");
         }
         if !urls.is_empty() {
             Url::view(urls, "Url");

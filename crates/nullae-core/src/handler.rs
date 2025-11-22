@@ -8,7 +8,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
     let mut node = Node::from_current_host(&domain, &ctx).await?;
 
     // Collect host information
-    node.collect_host_info()?;
+    node.collect_host_info(&ctx).await?;
 
     // Read environment from env var (optional)
     if let Ok(env) = std::env::var("NULLAE_ENVIRONMENT") {
