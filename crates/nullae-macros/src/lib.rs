@@ -19,13 +19,16 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
                 {
                     // Check if field type is Option
                     let is_option = if let syn::Type::Path(type_path) = &field.ty {
-                        type_path.path.segments.last()
+                        type_path
+                            .path
+                            .segments
+                            .last()
                             .map(|seg| seg.ident == "Option")
                             .unwrap_or(false)
                     } else {
                         false
                     };
-                    
+
                     field_data.push((ident.clone(), ident.to_string(), is_option));
                 }
             }
@@ -61,8 +64,6 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
 
     expanded.into()
 }
-
-
 
 #[proc_macro_derive(Entity)]
 pub fn entity(input: TokenStream) -> TokenStream {

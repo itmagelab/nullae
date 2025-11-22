@@ -7,32 +7,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Index(Vec<Item>);
 
-impl ItemKind {
-    fn as_str(&self) -> &'static str {
-        match self {
-            ItemKind::Hostname => "hostname",
-            ItemKind::Name => "name",
-            ItemKind::ShortHash => "short_hash",
-            ItemKind::Slug => "slug",
-            ItemKind::Arch => "arch",
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-enum ItemKind {
-    #[serde(rename = "hostname")]
-    Hostname,
-    #[serde(rename = "name")]
-    Name,
-    #[serde(rename = "short_hash")]
-    ShortHash,
-    #[serde(rename = "slug")]
-    Slug,
-    #[serde(rename = "arch")]
-    Arch,
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 struct ItemData {
     key: String,
@@ -41,34 +15,26 @@ struct ItemData {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Item {
-    kind: ItemKind,
+    kind: String,
     data: ItemData,
 }
 
 impl Item {
     /// Creates a new Item from references, avoiding unnecessary cloning
     pub fn new(kind: &str, key: &str, hash: &str) -> anyhow::Result<Self> {
-        let kind = match kind {
-            "hostname" => ItemKind::Hostname,
-            "name" => ItemKind::Name,
-            "short_hash" => ItemKind::ShortHash,
-            "slug" => ItemKind::Slug,
-            "arch" => ItemKind::Arch,
-            _ => anyhow::bail!("Unknown item kind: {}", kind),
-        };
-
         let data = ItemData {
             key: key.to_string(),
             value: vec![hash.to_string()],
         };
 
-        Ok(Self { kind, data })
+        Ok(Self {
+            kind: kind.to_string(),
+            data,
+        })
     }
 
     fn path(&self) -> String {
-        let kind = self.kind.as_str();
-        let key = &self.data.key;
-        format!("{BASE_PATH}/index/{kind}/{key}")
+        format!("{BASE_PATH}/index/{}/{}", self.kind, self.data.key)
     }
 
     fn is_empty(&self) -> bool {

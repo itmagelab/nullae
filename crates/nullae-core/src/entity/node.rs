@@ -78,10 +78,10 @@ impl std::fmt::Display for Node {
         if let Some(env) = &self.environment {
             writeln!(f, "  → Environment: {}", env)?;
         }
-        if let Some(tags) = &self.tags {
-            if !tags.is_empty() {
-                writeln!(f, "  → Tags: {}", tags.join(", "))?;
-            }
+        if let Some(tags) = &self.tags
+            && !tags.is_empty()
+        {
+            writeln!(f, "  → Tags: {}", tags.join(", "))?;
         }
 
         Ok(())
