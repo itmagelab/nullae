@@ -3,18 +3,18 @@ use crate::prelude::*;
 pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
     let domain = Domain::new(&domain)?.save(&ctx).await?;
-    
+
     // Create Node from current host
     let mut node = Node::from_current_host(&domain, &ctx).await?;
-    
+
     // Collect host information
     node.collect_host_info()?;
-    
+
     // Read environment from env var (optional)
     if let Ok(env) = std::env::var("NULLAE_ENVIRONMENT") {
         node = node.with_environment(&env);
     }
-    
+
     // Read tags from env var (optional)
     if let Ok(tags_str) = std::env::var("NULLAE_TAGS") {
         let tags: Vec<String> = tags_str
@@ -26,11 +26,11 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
             node = node.with_tags(tags);
         }
     }
-    
+
     // Save updated Node
     let entity: Entity = node.into();
     ctx.repository().put(&entity).await?;
-    
+
     // Save index (including environment index)
     let node: Node = entity.try_into()?;
     node.index()?.save(&ctx).await?;

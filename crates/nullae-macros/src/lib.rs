@@ -23,7 +23,6 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
         }
     }
 
-
     let field_names: Vec<_> = field_idents.iter().map(|i| i.to_string()).collect();
 
     let expanded = quote! {

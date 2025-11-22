@@ -15,7 +15,7 @@ pub struct Node {
     pub(crate) domain: String,
     #[tabled(display("display::option", ""))]
     pub(crate) description: Option<String>,
-    
+
     // Host metrics
     #[tabled(skip)]
     pub(crate) os_type: Option<String>,
@@ -51,7 +51,7 @@ impl std::fmt::Display for Node {
         writeln!(f, "  → Hostname: {}", self.hostname)?;
         writeln!(f, "  → Domain: {}", self.domain)?;
         writeln!(f, "  → Hash: {}", self.hash)?;
-        
+
         // System information
         if let Some(os) = &self.os_type {
             write!(f, "  → OS: {}", os)?;
@@ -72,7 +72,7 @@ impl std::fmt::Display for Node {
                 writeln!(f)?;
             }
         }
-        
+
         // Operational information
         if let Some(env) = &self.environment {
             writeln!(f, "  → Environment: {}", env)?;
@@ -82,7 +82,7 @@ impl std::fmt::Display for Node {
                 writeln!(f, "  → Tags: {}", tags.join(", "))?;
             }
         }
-        
+
         Ok(())
     }
 }
@@ -152,44 +152,42 @@ impl Node {
     /// Collects information about the current host
     pub fn collect_host_info(&mut self) -> anyhow::Result<()> {
         use sysinfo::System;
-        
+
         // OS information
         self.os_type = Some(std::env::consts::OS.to_string());
         self.arch = Some(std::env::consts::ARCH.to_string());
-        
+
         // IP address
-        self.ip_address = local_ip_address::local_ip()
-            .ok()
-            .map(|ip| ip.to_string());
-        
+        self.ip_address = local_ip_address::local_ip().ok().map(|ip| ip.to_string());
+
         // System information
         let mut sys = System::new_all();
         sys.refresh_all();
-        
+
         self.cpu_cores = Some(sys.cpus().len());
         self.total_memory_gb = Some(sys.total_memory() / 1024 / 1024 / 1024);
-        
+
         // Timestamps
         let now = chrono::Utc::now().timestamp();
         if self.created_at.is_none() {
             self.created_at = Some(now);
         }
         self.last_seen = Some(now);
-        
+
         Ok(())
     }
-    
+
     /// Updates only last_seen timestamp (for heartbeat)
     pub fn heartbeat(&mut self) {
         self.last_seen = Some(chrono::Utc::now().timestamp());
     }
-    
+
     /// Sets the environment
     pub fn with_environment(mut self, env: &str) -> Self {
         self.environment = Some(env.to_string());
         self
     }
-    
+
     /// Adds tags
     pub fn with_tags(mut self, tags: Vec<String>) -> Self {
         self.tags = Some(tags);
