@@ -1,27 +1,29 @@
-use crate::repository::Repository;
+use crate::storage::consul::Consul;
+use crate::storage::Storage;
 
 /// Application context that holds shared resources and configuration.
 /// This should be passed through all application layers according to conventions.md.
-#[derive(Debug)]
 pub struct Context {
-    repository: Repository,
+    storage: Box<dyn Storage + Send + Sync>,
 }
 
 impl Context {
-    /// Creates a new Context with initialized Repository.
+    /// Creates a new Context with initialized Consul storage.
     ///
     /// # Errors
     ///
     /// Returns an error if:
     /// - Required environment variables are not set (NULLAE_CONSUL_URL)
-    /// - Repository initialization fails
+    /// - Storage initialization fails
     pub fn new() -> anyhow::Result<Self> {
-        let repository = Repository::new()?;
-        Ok(Self { repository })
+        let storage = Consul::new()?;
+        Ok(Self {
+            storage: Box::new(storage),
+        })
     }
 
-    /// Returns a reference to the Repository.
-    pub fn repository(&self) -> &Repository {
-        &self.repository
+    /// Returns a reference to the Storage.
+    pub fn storage(&self) -> &dyn Storage {
+        self.storage.as_ref()
     }
 }

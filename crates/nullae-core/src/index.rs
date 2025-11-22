@@ -88,9 +88,9 @@ impl Index {
 
     pub(crate) async fn save(self, ctx: &Context) -> anyhow::Result<()> {
         for mut new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", ctx.repository().url, new_item.path());
+            let url = format!("{}/v1/kv/{}", ctx.storage().url(), new_item.path());
 
-            let Ok(rs) = ctx.repository().pool.get(&url).send().await else {
+            let Ok(rs) = ctx.storage().pool().get(&url).send().await else {
                 anyhow::bail!("Got response ERROR");
             };
 
@@ -109,8 +109,8 @@ impl Index {
                 new_item.merge(saved_item);
             };
 
-            ctx.repository()
-                .pool
+            ctx.storage()
+                .pool()
                 .put(&url)
                 .json(&new_item.payload()?)
                 .send()
@@ -122,8 +122,8 @@ impl Index {
 
     pub(crate) async fn purge(self, ctx: &Context) -> anyhow::Result<()> {
         for new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", ctx.repository().url, new_item.path());
-            let rs = ctx.repository().pool.get(&url).send().await?;
+            let url = format!("{}/v1/kv/{}", ctx.storage().url(), new_item.path());
+            let rs = ctx.storage().pool().get(&url).send().await?;
 
             if !rs.status().is_success() {
                 continue;
@@ -138,11 +138,11 @@ impl Index {
             saved.subtract(new_item);
 
             if saved.is_empty() {
-                ctx.repository().pool.delete(&url).send().await?;
+                ctx.storage().pool().delete(&url).send().await?;
             } else {
                 let payload = saved.payload()?;
-                ctx.repository()
-                    .pool
+                ctx.storage()
+                    .pool()
                     .put(&url)
                     .json(&payload)
                     .send()

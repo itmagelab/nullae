@@ -5,9 +5,10 @@ use serde::Deserialize;
 
 use crate::BASE_PATH;
 use crate::prelude::*;
+use crate::storage::Storage;
 
 #[derive(Debug)]
-pub struct Repository {
+pub struct Consul {
     pub(crate) url: String,
     pub(crate) pool: reqwest::Client,
 }
@@ -41,7 +42,7 @@ impl Record {
     }
 }
 
-impl Repository {
+impl Consul {
     pub fn new() -> anyhow::Result<Self> {
         let url = std::env::var("NULLAE_CONSUL_URL")
             .map_err(|_| anyhow::anyhow!("NULLAE_CONSUL_URL environment variable is required"))?;
@@ -53,9 +54,6 @@ impl Repository {
         Ok(Self { url, pool })
     }
 
-    pub(crate) fn build_url(&self, path: &str) -> String {
-        format!("{}/v1/kv/{}", self.url, path)
-    }
 
     async fn get_by_url<S>(&self, url: S) -> anyhow::Result<Vec<Entity>>
     where
@@ -75,36 +73,7 @@ impl Repository {
             .collect()
     }
 
-    pub async fn put(&self, entity: &Entity) -> anyhow::Result<Entity> {
-        let payload = entity.payload()?;
-        let url = self.build_url(&entity.path());
-
-        self.pool.put(&url).json(&payload).send().await?;
-
-        let entity = self
-            .get_by_url(&url)
-            .await?
-            .pop()
-            .ok_or_else(|| anyhow::anyhow!("failed to get created entity"))?;
-
-        Ok(entity)
-    }
-
-    pub async fn create(&self, entity: &Entity) -> anyhow::Result<Entity> {
-        if let Some(existing) = self.get(entity).await? {
-            return Ok(existing);
-        }
-
-        self.put(entity).await
-    }
-
-    pub async fn get(&self, entity: &Entity) -> anyhow::Result<Option<Entity>> {
-        let url = self.build_url(&entity.path());
-
-        Ok(self.get_by_url(url).await?.pop())
-    }
-
-    pub async fn find_by_entity(&self, hash: &str) -> anyhow::Result<Vec<Entity>> {
+    async fn find_by_entity(&self, hash: &str) -> anyhow::Result<Vec<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity"));
 
         let rs = self
@@ -131,8 +100,43 @@ impl Repository {
 
         Ok(entities)
     }
+}
 
-    pub async fn find_by_hash(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
+#[async_trait::async_trait]
+impl Storage for Consul {
+    fn build_url(&self, path: &str) -> String {
+        format!("{}/v1/kv/{}", self.url, path)
+    }
+
+    async fn get(&self, entity: &Entity) -> anyhow::Result<Option<Entity>> {
+        let url = self.build_url(&entity.path());
+        Ok(self.get_by_url(url).await?.pop())
+    }
+
+    async fn put(&self, entity: &Entity) -> anyhow::Result<Entity> {
+        let payload = entity.payload()?;
+        let url = self.build_url(&entity.path());
+
+        self.pool.put(&url).json(&payload).send().await?;
+
+        let entity = self
+            .get_by_url(&url)
+            .await?
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("failed to get created entity"))?;
+
+        Ok(entity)
+    }
+
+    async fn create(&self, entity: &Entity) -> anyhow::Result<Entity> {
+        if let Some(existing) = self.get(entity).await? {
+            return Ok(existing);
+        }
+
+        self.put(entity).await
+    }
+
+    async fn find_by_hash(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
         if let Some(entity) = self.get_by_url(url).await?.into_iter().next() {
             return Ok(Some(entity));
@@ -141,25 +145,12 @@ impl Repository {
         Ok(None)
     }
 
-    pub async fn find_by_slug(&self, slug: &str) -> anyhow::Result<Option<Entity>> {
+    async fn find_by_slug(&self, slug: &str) -> anyhow::Result<Option<Entity>> {
         if let Some(entity) = self.find_by_index("slug", slug).await?.pop() {
             return Ok(Some(entity));
         }
 
         Ok(None)
-    }
-
-    pub async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
-        let mut vec: Vec<Entity> = vec![];
-
-        vec.extend(self.find_by_hash(pattern).await?);
-        vec.extend(self.find_by_slug(pattern).await?);
-
-        vec.extend(self.find_by_index("hostname", pattern).await?);
-        vec.extend(self.find_by_index("name", pattern).await?);
-
-        vec.extend(self.find_by_entity(pattern).await?);
-        Ok(vec)
     }
 
     async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>> {
@@ -207,7 +198,20 @@ impl Repository {
         Ok(entities)
     }
 
-    pub async fn list(&self) -> anyhow::Result<Vec<Entity>> {
+    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
+        let mut vec: Vec<Entity> = vec![];
+
+        vec.extend(self.find_by_hash(pattern).await?);
+        vec.extend(self.find_by_slug(pattern).await?);
+
+        vec.extend(self.find_by_index("hostname", pattern).await?);
+        vec.extend(self.find_by_index("name", pattern).await?);
+
+        vec.extend(self.find_by_entity(pattern).await?);
+        Ok(vec)
+    }
+
+    async fn list(&self) -> anyhow::Result<Vec<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity"));
 
         let rs = self
@@ -226,5 +230,13 @@ impl Repository {
             .into_iter()
             .map(|r| r.into_entity())
             .collect()
+    }
+
+    fn pool(&self) -> &reqwest::Client {
+        &self.pool
+    }
+
+    fn url(&self) -> &str {
+        &self.url
     }
 }

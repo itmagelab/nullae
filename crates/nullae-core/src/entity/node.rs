@@ -160,9 +160,9 @@ impl Node {
         let domain = Domain::get(&domain.hash, ctx).await?;
         let mut domain_entity: Entity = domain.into();
         domain_entity.add_child(&node.hash);
-        ctx.repository().put(&domain_entity).await?;
+        ctx.storage().put(&domain_entity).await?;
 
-        let created: Self = ctx.repository().create(&node.into()).await?.try_into()?;
+        let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
 
         // Automatically save index
         created.index()?.save(ctx).await?;
@@ -216,7 +216,7 @@ impl Node {
     }
 
     pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
-        let Some(mut entity) = ctx.repository().find_by_hash(&self.domain).await? else {
+        let Some(mut entity) = ctx.storage().find_by_hash(&self.domain).await? else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",
                 self.hash,
@@ -225,13 +225,13 @@ impl Node {
             );
         };
         entity.remove_child(&self.hash);
-        ctx.repository().put(&entity).await?;
+        ctx.storage().put(&entity).await?;
 
         // Delete node entity and purge index
         let node_entity: Entity = self.into();
         let index = Index::from_entity(&node_entity)?;
-        let url = ctx.repository().build_url(&node_entity.path());
-        ctx.repository().pool.delete(&url).send().await?;
+        let url = ctx.storage().build_url(&node_entity.path());
+        ctx.storage().pool().delete(&url).send().await?;
         index.purge(ctx).await?;
 
         Ok(())

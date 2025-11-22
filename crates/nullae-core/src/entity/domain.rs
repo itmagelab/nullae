@@ -64,7 +64,7 @@ impl Domain {
     }
 
     pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
-        let domains = ctx.repository().find_by_hash(hash).await?;
+        let domains = ctx.storage().find_by_hash(hash).await?;
         let Some(entity) = domains else {
             anyhow::bail!("Can't find domain for hash: {}", hash);
         };
@@ -81,7 +81,7 @@ impl Domain {
 
     pub async fn save(self, ctx: &Context) -> anyhow::Result<Self> {
         self.index()?.save(ctx).await?;
-        ctx.repository().create(&self.into()).await?.try_into()
+        ctx.storage().create(&self.into()).await?.try_into()
     }
 
     pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {

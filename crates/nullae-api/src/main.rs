@@ -61,7 +61,7 @@ async fn redirect(
 
 async fn redirect_handler(hash: &str) -> anyhow::Result<String> {
     let ctx = Context::new()?;
-    let original_url = if let Some(entity) = ctx.repository().find_by_slug(hash).await? {
+    let original_url = if let Some(entity) = ctx.storage().find_by_slug(hash).await? {
         let EntityKind::Url { inner, .. } = entity.kind else {
             anyhow::bail!("Invalid URL entity");
         };

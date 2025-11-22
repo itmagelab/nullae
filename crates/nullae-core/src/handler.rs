@@ -29,7 +29,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
 
     // Save updated Node
     let entity: Entity = node.into();
-    ctx.repository().put(&entity).await?;
+    ctx.storage().put(&entity).await?;
 
     // Save index (including environment index)
     let node: Node = entity.try_into()?;
@@ -44,7 +44,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
 
 pub async fn list() -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let entities = ctx.repository().list().await?;
+    let entities = ctx.storage().list().await?;
 
     Entity::view(entities);
 
@@ -53,7 +53,7 @@ pub async fn list() -> Result<(), anyhow::Error> {
 
 pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let mut entities = ctx.repository().find(&pattern).await?;
+    let mut entities = ctx.storage().find(&pattern).await?;
     let same = if let Some(first) = entities.first() {
         entities.iter().all(|e| e.hash() == first.hash())
     } else {
@@ -70,7 +70,7 @@ pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
 
 pub async fn show(pattern: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let entities = ctx.repository().find(&pattern).await?;
+    let entities = ctx.storage().find(&pattern).await?;
     for entity in entities {
         println!("{}", entity)
     }

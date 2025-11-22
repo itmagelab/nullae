@@ -3,7 +3,7 @@ pub(crate) mod entity;
 pub mod handler;
 pub(crate) mod index;
 pub mod prelude;
-pub mod repository;
+pub mod storage;
 
 use crate::index::Index;
 use serde::{Deserialize, Serialize};

@@ -76,8 +76,8 @@ impl Entity {
             EntityKind::Node { inner } => inner.delete(ctx).await?,
             _ => {
                 // Delete entity from repository
-                let url = ctx.repository().build_url(&self.path());
-                ctx.repository().pool.delete(&url).send().await?;
+                let url = ctx.storage().build_url(&self.path());
+                ctx.storage().pool().delete(&url).send().await?;
 
                 // Purge index entries
                 index.purge(ctx).await?;

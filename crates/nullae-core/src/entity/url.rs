@@ -52,7 +52,7 @@ impl Url {
     pub async fn create(name: &str, ctx: &Context) -> anyhow::Result<Self> {
         let url = Self::new(name)?;
         url.index()?.save(ctx).await?;
-        ctx.repository().create(&url.into()).await?.try_into()
+        ctx.storage().create(&url.into()).await?.try_into()
     }
 
     pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
