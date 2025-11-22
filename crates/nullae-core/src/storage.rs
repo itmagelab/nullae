@@ -44,4 +44,13 @@ pub trait Storage {
 
     /// Gets base URL for low-level operations
     fn url(&self) -> &str;
+
+    /// Gets an index item by its path
+    async fn get_index_item(&self, path: &str) -> anyhow::Result<Option<Item>>;
+
+    /// Puts an index item
+    async fn put_index_item(&self, path: &str, item: &Item) -> anyhow::Result<()>;
+
+    /// Deletes an index item
+    async fn delete_index_item(&self, path: &str) -> anyhow::Result<()>;
 }

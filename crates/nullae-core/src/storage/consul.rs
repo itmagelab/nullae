@@ -217,4 +217,34 @@ impl Storage for Consul {
     fn url(&self) -> &str {
         &self.url
     }
+
+    async fn get_index_item(&self, path: &str) -> anyhow::Result<Option<Item>> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let rs = self.pool.get(&url).send().await?;
+
+        if !rs.status().is_success() {
+            return Ok(None);
+        }
+
+        let mut records: Vec<Record> = rs.json().await?;
+        if let Some(record) = records.pop() {
+            let item: Item = serde_json::from_value(record.value()?)?;
+            Ok(Some(item))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn put_index_item(&self, path: &str, item: &Item) -> anyhow::Result<()> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let payload = item.payload()?;
+        self.pool.put(&url).json(&payload).send().await?;
+        Ok(())
+    }
+
+    async fn delete_index_item(&self, path: &str) -> anyhow::Result<()> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        self.pool.delete(&url).send().await?;
+        Ok(())
+    }
 }

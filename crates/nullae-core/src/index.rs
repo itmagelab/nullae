@@ -64,7 +64,7 @@ impl Item {
         self.data.value
     }
 
-    fn payload(self) -> anyhow::Result<serde_json::Value> {
+    pub(crate) fn payload(&self) -> anyhow::Result<serde_json::Value> {
         Ok(serde_json::to_value(self)?)
     }
 }
@@ -89,32 +89,12 @@ impl Index {
 
     pub(crate) async fn save(self, ctx: &Context) -> anyhow::Result<()> {
         for mut new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", ctx.storage().url(), new_item.path());
-
-            let Ok(rs) = ctx.storage().pool().get(&url).send().await else {
-                anyhow::bail!("Got response ERROR");
-            };
-
-            let status = rs.status();
-
-            let body = rs.text().await?;
-
-            let mut records: Vec<Record> = if status.is_success() {
-                serde_json::from_str(&body)?
-            } else {
-                vec![]
-            };
-
-            if let Some(record) = records.pop() {
-                let saved_item: Item = serde_json::from_value(record.value()?)?;
+            if let Some(saved_item) = ctx.storage().get_index_item(&new_item.path()).await? {
                 new_item.merge(saved_item);
-            };
+            }
 
             ctx.storage()
-                .pool()
-                .put(&url)
-                .json(&new_item.payload()?)
-                .send()
+                .put_index_item(&new_item.path(), &new_item)
                 .await?;
         }
 
@@ -123,26 +103,16 @@ impl Index {
 
     pub(crate) async fn purge(self, ctx: &Context) -> anyhow::Result<()> {
         for new_item in self.0 {
-            let url = format!("{}/v1/kv/{}", ctx.storage().url(), new_item.path());
-            let rs = ctx.storage().pool().get(&url).send().await?;
-
-            if !rs.status().is_success() {
-                continue;
-            }
-
-            let mut records: Vec<Record> = rs.json().await?;
-            let Some(record) = records.pop() else {
+            let Some(mut saved) = ctx.storage().get_index_item(&new_item.path()).await? else {
                 continue;
             };
 
-            let mut saved: Item = serde_json::from_value(record.value()?)?;
             saved.subtract(new_item);
 
             if saved.is_empty() {
-                ctx.storage().pool().delete(&url).send().await?;
+                ctx.storage().delete_index_item(&saved.path()).await?;
             } else {
-                let payload = saved.payload()?;
-                ctx.storage().pool().put(&url).json(&payload).send().await?;
+                ctx.storage().put_index_item(&saved.path(), &saved).await?;
             }
         }
 
