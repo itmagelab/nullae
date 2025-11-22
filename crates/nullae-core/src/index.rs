@@ -14,6 +14,7 @@ impl ItemKind {
             ItemKind::Name => "name",
             ItemKind::ShortHash => "short_hash",
             ItemKind::Slug => "slug",
+            ItemKind::Arch => "arch",
         }
     }
 }
@@ -28,6 +29,8 @@ enum ItemKind {
     ShortHash,
     #[serde(rename = "slug")]
     Slug,
+    #[serde(rename = "arch")]
+    Arch,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -50,6 +53,7 @@ impl Item {
             "name" => ItemKind::Name,
             "short_hash" => ItemKind::ShortHash,
             "slug" => ItemKind::Slug,
+            "arch" => ItemKind::Arch,
             _ => anyhow::bail!("Unknown item kind: {}", kind),
         };
 
