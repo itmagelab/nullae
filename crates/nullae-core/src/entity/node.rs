@@ -17,25 +17,45 @@ pub struct Node {
     pub(crate) description: Option<String>,
 
     // Host metrics
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) os_type: Option<String>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     #[index]
     pub(crate) arch: Option<String>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) ip_address: Option<String>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) cpu_cores: Option<usize>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) total_memory_gb: Option<u64>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) created_at: Option<i64>,
-    #[tabled(skip)]
+    #[tabled(display("display_timestamp"))]
     pub(crate) last_seen: Option<i64>,
-    #[tabled(skip)]
+    #[tabled(display("display::option", ""))]
     pub(crate) environment: Option<String>,
-    #[tabled(skip)]
+    #[tabled(display("display_tags"))]
     pub(crate) tags: Option<Vec<String>>,
+}
+
+fn display_timestamp(ts: &Option<i64>) -> String {
+    match ts {
+        Some(ts) => {
+            if let Some(datetime) = chrono::DateTime::from_timestamp(*ts, 0) {
+                datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+            } else {
+                ts.to_string()
+            }
+        }
+        None => String::new(),
+    }
+}
+
+fn display_tags(tags: &Option<Vec<String>>) -> String {
+    match tags {
+        Some(tags) => tags.join(", "),
+        None => String::new(),
+    }
 }
 
 fn short_hash(hash: &str, _: &Node) -> String {
