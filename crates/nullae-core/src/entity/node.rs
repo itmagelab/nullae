@@ -194,7 +194,7 @@ impl Node {
         // IP address - create Ip entity and store its hash
         if let Ok(local_ip) = local_ip_address::local_ip() {
             let ip_str = local_ip.to_string();
-            let ip = Ip::create(&ip_str, ctx).await?;
+            let ip = Ip::create(&ip_str, &self.hash, ctx).await?;
             self.ip = Some(ip.hash);
         }
 

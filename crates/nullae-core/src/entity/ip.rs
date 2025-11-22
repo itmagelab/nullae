@@ -30,7 +30,7 @@ impl EntityItem for Ip {
 }
 
 impl Ip {
-    pub fn new<S>(address: S) -> anyhow::Result<Self>
+    pub fn new<S>(address: S, parent_hash: &str) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
@@ -45,7 +45,7 @@ impl Ip {
             anyhow::bail!("Invalid IP address format: {}", address);
         }
 
-        let hash = format!("{}|", &address).hash();
+        let hash = format!("{}|{}", &address, parent_hash).hash();
         Ok(Self {
             hash,
             address,
@@ -61,8 +61,8 @@ impl Ip {
         entity.try_into()
     }
 
-    pub async fn create(address: &str, ctx: &Context) -> anyhow::Result<Self> {
-        let ip = Self::new(address)?;
+    pub async fn create(address: &str, parent_hash: &str, ctx: &Context) -> anyhow::Result<Self> {
+        let ip = Self::new(address, parent_hash)?;
         if let Ok(ip) = Ip::get(&ip.hash, ctx).await {
             return Ok(ip);
         };
