@@ -46,11 +46,7 @@ impl Ip {
         }
 
         let hash = format!("{}|{}", &address, parent_hash).hash();
-        Ok(Self {
-            hash,
-            address,
-            ..Default::default()
-        })
+        Ok(Self { hash, address })
     }
 
     pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
