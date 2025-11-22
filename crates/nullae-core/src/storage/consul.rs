@@ -25,20 +25,13 @@ pub struct Record {
 }
 
 impl Record {
-    pub fn value_as_slice(&self) -> anyhow::Result<Vec<u8>> {
-        let value = BASE64_STANDARD.decode(&self.value)?;
-        Ok(value)
-    }
-
     pub fn value(&self) -> anyhow::Result<serde_json::Value> {
-        let value = self.value_as_slice()?;
-        let value: serde_json::Value = serde_json::from_slice(&value)?;
-        Ok(value)
+        let bytes = BASE64_STANDARD.decode(&self.value)?;
+        Ok(serde_json::from_slice(&bytes)?)
     }
 
     pub fn into_entity(self) -> anyhow::Result<Entity> {
-        let value = self.value()?;
-        serde_json::from_value(value).map_err(Into::into)
+        serde_json::from_value(self.value()?).map_err(Into::into)
     }
 }
 
@@ -134,19 +127,11 @@ impl Storage for Consul {
 
     async fn find_by_hash(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
-        if let Some(entity) = self.get_by_url(&url).await?.into_iter().next() {
-            return Ok(Some(entity));
-        }
-
-        Ok(None)
+        Ok(self.get_by_url(&url).await?.pop())
     }
 
     async fn find_by_slug(&self, slug: &str) -> anyhow::Result<Option<Entity>> {
-        if let Some(entity) = self.find_by_index("slug", slug).await?.pop() {
-            return Ok(Some(entity));
-        }
-
-        Ok(None)
+        Ok(self.find_by_index("slug", slug).await?.pop())
     }
 
     async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>> {
@@ -195,16 +180,13 @@ impl Storage for Consul {
     }
 
     async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
-        let mut vec: Vec<Entity> = vec![];
-
-        vec.extend(self.find_by_hash(pattern).await?);
-        vec.extend(self.find_by_slug(pattern).await?);
-
-        vec.extend(self.find_by_index("hostname", pattern).await?);
-        vec.extend(self.find_by_index("name", pattern).await?);
-
-        vec.extend(self.find_by_entity(pattern).await?);
-        Ok(vec)
+        let mut entities = Vec::new();
+        entities.extend(self.find_by_hash(pattern).await?);
+        entities.extend(self.find_by_slug(pattern).await?);
+        entities.extend(self.find_by_index("hostname", pattern).await?);
+        entities.extend(self.find_by_index("name", pattern).await?);
+        entities.extend(self.find_by_entity(pattern).await?);
+        Ok(entities)
     }
 
     async fn list(&self) -> anyhow::Result<Vec<Entity>> {
