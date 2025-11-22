@@ -7,7 +7,7 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    let mut field_idents = Vec::new();
+    let mut field_data = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data
         && let Fields::Named(fields_named) = &data_struct.fields
@@ -17,22 +17,43 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
                 if attr.path().is_ident("index")
                     && let Some(ident) = &field.ident
                 {
-                    field_idents.push(ident.clone());
+                    // Check if field type is Option
+                    let is_option = if let syn::Type::Path(type_path) = &field.ty {
+                        type_path.path.segments.last()
+                            .map(|seg| seg.ident == "Option")
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    };
+                    
+                    field_data.push((ident.clone(), ident.to_string(), is_option));
                 }
             }
         }
     }
 
-    let field_names: Vec<_> = field_idents.iter().map(|i| i.to_string()).collect();
+    // Generate code for each field based on its type
+    let index_code = field_data.iter().map(|(ident, name, is_option)| {
+        if *is_option {
+            quote! {
+                if let Some(value) = &self.#ident {
+                    let item = Item::new(#name, value, &self.hash)?;
+                    index.push(item);
+                }
+            }
+        } else {
+            quote! {
+                let item = Item::new(#name, &self.#ident, &self.hash)?;
+                index.push(item);
+            }
+        }
+    });
 
     let expanded = quote! {
         impl Indexable for #name {
             fn index(&self) -> anyhow::Result<Index> {
                 let mut index = Index::new();
-                #(
-                    let item = Item::new(#field_names, &self.#field_idents, &self.hash)?;
-                    index.push(item);
-                )*
+                #(#index_code)*
                 Ok(index)
             }
         }
@@ -40,6 +61,8 @@ pub fn derive_indexable(input: TokenStream) -> TokenStream {
 
     expanded.into()
 }
+
+
 
 #[proc_macro_derive(Entity)]
 pub fn entity(input: TokenStream) -> TokenStream {

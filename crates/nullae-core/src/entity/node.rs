@@ -20,6 +20,7 @@ pub struct Node {
     #[tabled(skip)]
     pub(crate) os_type: Option<String>,
     #[tabled(skip)]
+    #[index]
     pub(crate) arch: Option<String>,
     #[tabled(skip)]
     pub(crate) ip_address: Option<String>,
