@@ -53,13 +53,16 @@ impl Consul {
             .build()?;
         Ok(Self { url, pool })
     }
+}
 
+#[async_trait::async_trait]
+impl Storage for Consul {
+    fn build_url(&self, path: &str) -> String {
+        format!("{}/v1/kv/{}", self.url, path)
+    }
 
-    async fn get_by_url<S>(&self, url: S) -> anyhow::Result<Vec<Entity>>
-    where
-        S: Into<String>,
-    {
-        let rs = self.pool.get(url.into()).send().await?;
+    async fn get_by_url(&self, url: &str) -> anyhow::Result<Vec<Entity>> {
+        let rs = self.pool.get(url).send().await?;
 
         if !rs.status().is_success() {
             return Ok(vec![]);
@@ -100,17 +103,10 @@ impl Consul {
 
         Ok(entities)
     }
-}
-
-#[async_trait::async_trait]
-impl Storage for Consul {
-    fn build_url(&self, path: &str) -> String {
-        format!("{}/v1/kv/{}", self.url, path)
-    }
 
     async fn get(&self, entity: &Entity) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&entity.path());
-        Ok(self.get_by_url(url).await?.pop())
+        Ok(self.get_by_url(&url).await?.pop())
     }
 
     async fn put(&self, entity: &Entity) -> anyhow::Result<Entity> {
@@ -138,7 +134,7 @@ impl Storage for Consul {
 
     async fn find_by_hash(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
-        if let Some(entity) = self.get_by_url(url).await?.into_iter().next() {
+        if let Some(entity) = self.get_by_url(&url).await?.into_iter().next() {
             return Ok(Some(entity));
         }
 

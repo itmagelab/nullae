@@ -9,6 +9,12 @@ pub trait Storage {
     /// Builds a URL for the given path
     fn build_url(&self, path: &str) -> String;
 
+    /// Gets entities by URL (internal helper method)
+    async fn get_by_url(&self, url: &str) -> anyhow::Result<Vec<Entity>>;
+
+    /// Finds entities by hash pattern (internal helper method)
+    async fn find_by_entity(&self, hash: &str) -> anyhow::Result<Vec<Entity>>;
+
     /// Gets an entity by its path
     async fn get(&self, entity: &Entity) -> anyhow::Result<Option<Entity>>;
 
