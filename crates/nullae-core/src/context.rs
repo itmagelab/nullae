@@ -1,5 +1,5 @@
-use crate::storage::consul::Consul;
 use crate::storage::Storage;
+use crate::storage::consul::Consul;
 
 /// Application context that holds shared resources and configuration.
 /// This should be passed through all application layers according to conventions.md.

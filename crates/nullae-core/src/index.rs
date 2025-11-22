@@ -141,12 +141,7 @@ impl Index {
                 ctx.storage().pool().delete(&url).send().await?;
             } else {
                 let payload = saved.payload()?;
-                ctx.storage()
-                    .pool()
-                    .put(&url)
-                    .json(&payload)
-                    .send()
-                    .await?;
+                ctx.storage().pool().put(&url).json(&payload).send().await?;
             }
         }
 
