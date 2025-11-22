@@ -35,6 +35,10 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
     let node: Node = entity.try_into()?;
     node.index()?.save(&ctx).await?;
 
+    println!("✅ Discovery completed successfully");
+    println!();
+    println!("{}", node);
+
     Ok(())
 }
 
