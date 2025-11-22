@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 env:
-  WERTER_DATABASE_PASSWORD: itcast
+  NULLAE_CONSUL_URL: http://localhost:8500
   RUST_LOG: debug
 
 jobs:
