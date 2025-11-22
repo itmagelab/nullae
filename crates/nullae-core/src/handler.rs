@@ -27,8 +27,23 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
         }
     }
 
+    // IP address - create Ip entity and store its hash
+    let ip_hash = if let Ok(local_ip) = local_ip_address::local_ip() {
+        let ip_str = local_ip.to_string();
+        let ip = Ip::create(&ip_str, &node.hash, &ctx).await?;
+        node.ip = Some(ip.hash.clone());
+        Some(ip.hash)
+    } else {
+        None
+    };
+
     // Save updated Node
-    let entity: Entity = node.into();
+    let mut entity: Entity = node.into();
+
+    if let Some(hash) = ip_hash {
+        entity.add_child(&hash);
+    }
+
     ctx.storage().put(&entity).await?;
 
     // Save index (including environment index)

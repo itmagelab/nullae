@@ -184,19 +184,12 @@ impl Node {
     }
 
     /// Collects information about the current host
-    pub async fn collect_host_info(&mut self, ctx: &Context) -> anyhow::Result<()> {
+    pub async fn collect_host_info(&mut self, _ctx: &Context) -> anyhow::Result<()> {
         use sysinfo::System;
 
         // OS information
         self.os_type = Some(std::env::consts::OS.to_string());
         self.arch = Some(std::env::consts::ARCH.to_string());
-
-        // IP address - create Ip entity and store its hash
-        if let Ok(local_ip) = local_ip_address::local_ip() {
-            let ip_str = local_ip.to_string();
-            let ip = Ip::create(&ip_str, &self.hash, ctx).await?;
-            self.ip = Some(ip.hash);
-        }
 
         // System information
         let mut sys = System::new_all();

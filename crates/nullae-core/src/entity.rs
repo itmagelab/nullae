@@ -47,7 +47,7 @@ impl std::fmt::Display for Entity {
 }
 
 impl Entity {
-    fn add_child(&mut self, hash: &str) {
+    pub(crate) fn add_child(&mut self, hash: &str) {
         self.metadata
             .children
             .get_or_insert_with(Vec::new)
