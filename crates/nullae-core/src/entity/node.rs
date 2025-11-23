@@ -167,12 +167,12 @@ impl Node {
         })
     }
 
-    pub async fn from_current_host(domain: &Domain, ctx: &Context) -> anyhow::Result<Self> {
+    pub async fn from_current_host<S: Storage>(domain: &Domain, ctx: &Context<S>) -> anyhow::Result<Self> {
         let hostname = hostname()?;
         Self::create(&hostname, domain, ctx).await
     }
 
-    pub async fn create(name: &str, domain: &Domain, ctx: &Context) -> anyhow::Result<Self> {
+    pub async fn create<S: Storage>(name: &str, domain: &Domain, ctx: &Context<S>) -> anyhow::Result<Self> {
         let node = Self::new(name, &domain.hash)?;
         let domain = Domain::get(&domain.hash, ctx).await?;
         let mut domain_entity: Entity = domain.into();
@@ -188,7 +188,7 @@ impl Node {
     }
 
     /// Collects information about the current host
-    pub async fn collect_host_info(&mut self, _ctx: &Context) -> anyhow::Result<()> {
+    pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
         use sysinfo::System;
 
         // OS information
@@ -229,7 +229,7 @@ impl Node {
         self
     }
 
-    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
+    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         let Some(mut entity) = ctx.storage().get(&self.domain).await? else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",

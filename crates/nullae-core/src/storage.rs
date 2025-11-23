@@ -1,39 +1,38 @@
 pub mod consul;
 
 use crate::prelude::*;
+use std::future::Future;
 
 /// Storage trait defining the interface for all storage operations.
 /// Implementations can use different backends (Consul, Redis, PostgreSQL, etc.).
-#[async_trait::async_trait]
-#[async_trait::async_trait]
 pub trait Storage {
     /// Gets an index item by its path
-    async fn get_index(&self, path: &str) -> anyhow::Result<Option<Item>>;
+    fn get_index(&self, path: &str) -> impl Future<Output = anyhow::Result<Option<Item>>> + Send;
 
     /// Saves or updates an entity
-    async fn save(&self, entity: &Entity) -> anyhow::Result<Entity>;
+    fn save(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
 
     /// Puts an index item
-    async fn save_index(&self, path: &str, item: &Item) -> anyhow::Result<()>;
+    fn save_index(&self, path: &str, item: &Item) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Creates an entity (returns existing if already exists)
-    async fn create(&self, entity: &Entity) -> anyhow::Result<Entity>;
+    fn create(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
 
     /// Finds entities by pattern (hash, slug, or index)
-    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>>;
+    fn find(&self, pattern: &str) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
 
     /// Finds entity by hash
-    async fn get(&self, hash: &str) -> anyhow::Result<Option<Entity>>;
+    fn get(&self, hash: &str) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send;
 
     /// Finds entities by index
-    async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>>;
+    fn find_by_index(&self, index: &str, pattern: &str) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
 
     /// Lists all entities
-    async fn list(&self) -> anyhow::Result<Vec<Entity>>;
+    fn list(&self) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
 
     /// Deletes an index item
-    async fn delete_index(&self, path: &str) -> anyhow::Result<()>;
+    fn delete_index(&self, path: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Deletes an entity
-    async fn delete(&self, entity: &Entity) -> anyhow::Result<()>;
+    fn delete(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<()>> + Send;
 }

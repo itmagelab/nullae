@@ -104,7 +104,6 @@ impl Consul {
     }
 }
 
-#[async_trait::async_trait]
 impl Storage for Consul {
     async fn get_index(&self, path: &str) -> anyhow::Result<Option<Item>> {
         let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));

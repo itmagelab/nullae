@@ -63,7 +63,7 @@ impl Domain {
         })
     }
 
-    pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
+    pub async fn get<S: Storage>(hash: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
         let domains = ctx.storage().get(hash).await?;
         let Some(entity) = domains else {
             anyhow::bail!("Can't find domain for hash: {}", hash);
@@ -71,7 +71,7 @@ impl Domain {
         entity.try_into()
     }
 
-    pub async fn create(name: &str, ctx: &Context) -> anyhow::Result<Self> {
+    pub async fn create<S: Storage>(name: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
         let domain = Self::new(name)?;
         if let Ok(domain) = Domain::get(&domain.hash, ctx).await {
             return Ok(domain);
@@ -79,12 +79,12 @@ impl Domain {
         domain.save(ctx).await
     }
 
-    pub async fn save(self, ctx: &Context) -> anyhow::Result<Self> {
+    pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Self> {
         self.index()?.save(ctx).await?;
         ctx.storage().create(&self.into()).await?.try_into()
     }
 
-    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
+    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         let entity: Entity = self.into();
         entity.delete(ctx).await?;
         Ok(())

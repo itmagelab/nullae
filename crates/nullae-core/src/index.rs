@@ -87,7 +87,7 @@ impl Index {
         }
     }
 
-    pub(crate) async fn save(self, ctx: &Context) -> anyhow::Result<()> {
+    pub(crate) async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         for mut new_item in self.0 {
             if let Some(saved_item) = ctx.storage().get_index(&new_item.path()).await? {
                 new_item.merge(saved_item);
@@ -101,7 +101,7 @@ impl Index {
         Ok(())
     }
 
-    pub(crate) async fn purge(self, ctx: &Context) -> anyhow::Result<()> {
+    pub(crate) async fn purge<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         for new_item in self.0 {
             let Some(mut saved) = ctx.storage().get_index(&new_item.path()).await? else {
                 continue;

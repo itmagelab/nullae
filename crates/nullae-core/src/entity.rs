@@ -67,7 +67,7 @@ impl Entity {
         self.metadata.children.is_some()
     }
 
-    pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
+    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         if self.has_children() {
             anyhow::bail!("Can't delete entity with children");
         }
