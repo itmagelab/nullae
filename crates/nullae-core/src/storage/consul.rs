@@ -46,10 +46,7 @@ impl Consul {
             .build()?;
         Ok(Self { url, pool })
     }
-}
 
-#[async_trait::async_trait]
-impl Storage for Consul {
     fn build_url(&self, path: &str) -> String {
         format!("{}/v1/kv/{}", self.url, path)
     }
@@ -69,7 +66,7 @@ impl Storage for Consul {
             .collect()
     }
 
-    async fn find_by_entity(&self, hash: &str) -> anyhow::Result<Vec<Entity>> {
+    async fn find_by_partial_hash(&self, hash: &str) -> anyhow::Result<Vec<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity"));
 
         let rs = self
@@ -97,12 +94,36 @@ impl Storage for Consul {
         Ok(entities)
     }
 
-    async fn get(&self, entity: &Entity) -> anyhow::Result<Option<Entity>> {
+    async fn find_by_slug(&self, slug: &str) -> anyhow::Result<Option<Entity>> {
+        Ok(self.find_by_index("slug", slug).await?.pop())
+    }
+
+    async fn get_entity(&self, entity: &Entity) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&entity.path());
         Ok(self.get_by_url(&url).await?.pop())
     }
+}
 
-    async fn put(&self, entity: &Entity) -> anyhow::Result<Entity> {
+#[async_trait::async_trait]
+impl Storage for Consul {
+    async fn get_index(&self, path: &str) -> anyhow::Result<Option<Item>> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let rs = self.pool.get(&url).send().await?;
+
+        if !rs.status().is_success() {
+            return Ok(None);
+        }
+
+        let mut records: Vec<Record> = rs.json().await?;
+        if let Some(record) = records.pop() {
+            let item: Item = serde_json::from_value(record.value()?)?;
+            Ok(Some(item))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn save(&self, entity: &Entity) -> anyhow::Result<Entity> {
         let payload = entity.payload()?;
         let url = self.build_url(&entity.path());
 
@@ -117,21 +138,34 @@ impl Storage for Consul {
         Ok(entity)
     }
 
+    async fn save_index(&self, path: &str, item: &Item) -> anyhow::Result<()> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let payload = item.payload()?;
+        self.pool.put(&url).json(&payload).send().await?;
+        Ok(())
+    }
+
     async fn create(&self, entity: &Entity) -> anyhow::Result<Entity> {
-        if let Some(existing) = self.get(entity).await? {
+        if let Some(existing) = self.get_entity(entity).await? {
             return Ok(existing);
         }
 
-        self.put(entity).await
+        self.save(entity).await
     }
 
-    async fn find_by_hash(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
+    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
+        let mut entities = Vec::new();
+        entities.extend(self.get(pattern).await?);
+        entities.extend(self.find_by_slug(pattern).await?);
+        entities.extend(self.find_by_index("hostname", pattern).await?);
+        entities.extend(self.find_by_index("name", pattern).await?);
+        entities.extend(self.find_by_partial_hash(pattern).await?);
+        Ok(entities)
+    }
+
+    async fn get(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
         Ok(self.get_by_url(&url).await?.pop())
-    }
-
-    async fn find_by_slug(&self, slug: &str) -> anyhow::Result<Option<Entity>> {
-        Ok(self.find_by_index("slug", slug).await?.pop())
     }
 
     async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>> {
@@ -179,16 +213,6 @@ impl Storage for Consul {
         Ok(entities)
     }
 
-    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
-        let mut entities = Vec::new();
-        entities.extend(self.find_by_hash(pattern).await?);
-        entities.extend(self.find_by_slug(pattern).await?);
-        entities.extend(self.find_by_index("hostname", pattern).await?);
-        entities.extend(self.find_by_index("name", pattern).await?);
-        entities.extend(self.find_by_entity(pattern).await?);
-        Ok(entities)
-    }
-
     async fn list(&self) -> anyhow::Result<Vec<Entity>> {
         let url = self.build_url(&format!("{BASE_PATH}/entity"));
 
@@ -210,39 +234,7 @@ impl Storage for Consul {
             .collect()
     }
 
-    fn pool(&self) -> &reqwest::Client {
-        &self.pool
-    }
-
-    fn url(&self) -> &str {
-        &self.url
-    }
-
-    async fn get_index_item(&self, path: &str) -> anyhow::Result<Option<Item>> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
-        let rs = self.pool.get(&url).send().await?;
-
-        if !rs.status().is_success() {
-            return Ok(None);
-        }
-
-        let mut records: Vec<Record> = rs.json().await?;
-        if let Some(record) = records.pop() {
-            let item: Item = serde_json::from_value(record.value()?)?;
-            Ok(Some(item))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn put_index_item(&self, path: &str, item: &Item) -> anyhow::Result<()> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
-        let payload = item.payload()?;
-        self.pool.put(&url).json(&payload).send().await?;
-        Ok(())
-    }
-
-    async fn delete_index_item(&self, path: &str) -> anyhow::Result<()> {
+    async fn delete_index(&self, path: &str) -> anyhow::Result<()> {
         let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
         self.pool.delete(&url).send().await?;
         Ok(())

@@ -50,7 +50,7 @@ impl Ip {
     }
 
     pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
-        let ips = ctx.storage().find_by_hash(hash).await?;
+        let ips = ctx.storage().get(hash).await?;
         let Some(entity) = ips else {
             anyhow::bail!("Can't find IP for hash: {}", hash);
         };

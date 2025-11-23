@@ -89,12 +89,12 @@ impl Index {
 
     pub(crate) async fn save(self, ctx: &Context) -> anyhow::Result<()> {
         for mut new_item in self.0 {
-            if let Some(saved_item) = ctx.storage().get_index_item(&new_item.path()).await? {
+            if let Some(saved_item) = ctx.storage().get_index(&new_item.path()).await? {
                 new_item.merge(saved_item);
             }
 
             ctx.storage()
-                .put_index_item(&new_item.path(), &new_item)
+                .save_index(&new_item.path(), &new_item)
                 .await?;
         }
 
@@ -103,16 +103,16 @@ impl Index {
 
     pub(crate) async fn purge(self, ctx: &Context) -> anyhow::Result<()> {
         for new_item in self.0 {
-            let Some(mut saved) = ctx.storage().get_index_item(&new_item.path()).await? else {
+            let Some(mut saved) = ctx.storage().get_index(&new_item.path()).await? else {
                 continue;
             };
 
             saved.subtract(new_item);
 
             if saved.is_empty() {
-                ctx.storage().delete_index_item(&saved.path()).await?;
+                ctx.storage().delete_index(&saved.path()).await?;
             } else {
-                ctx.storage().put_index_item(&saved.path(), &saved).await?;
+                ctx.storage().save_index(&saved.path(), &saved).await?;
             }
         }
 

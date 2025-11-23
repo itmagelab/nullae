@@ -177,7 +177,7 @@ impl Node {
         let domain = Domain::get(&domain.hash, ctx).await?;
         let mut domain_entity: Entity = domain.into();
         domain_entity.add_child(&node.hash);
-        ctx.storage().put(&domain_entity).await?;
+        ctx.storage().save(&domain_entity).await?;
 
         let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
 
@@ -230,7 +230,7 @@ impl Node {
     }
 
     pub async fn delete(self, ctx: &Context) -> anyhow::Result<()> {
-        let Some(mut entity) = ctx.storage().find_by_hash(&self.domain).await? else {
+        let Some(mut entity) = ctx.storage().get(&self.domain).await? else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",
                 self.hash,
@@ -239,7 +239,7 @@ impl Node {
             );
         };
         entity.remove_child(&self.hash);
-        ctx.storage().put(&entity).await?;
+        ctx.storage().save(&entity).await?;
 
         // Delete node entity and purge index
         let node_entity: Entity = self.into();

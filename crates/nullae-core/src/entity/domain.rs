@@ -64,7 +64,7 @@ impl Domain {
     }
 
     pub async fn get(hash: &str, ctx: &Context) -> anyhow::Result<Self> {
-        let domains = ctx.storage().find_by_hash(hash).await?;
+        let domains = ctx.storage().get(hash).await?;
         let Some(entity) = domains else {
             anyhow::bail!("Can't find domain for hash: {}", hash);
         };

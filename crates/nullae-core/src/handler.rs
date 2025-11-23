@@ -63,7 +63,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
         entity.add_child(&hash);
     }
 
-    ctx.storage().put(&entity).await?;
+    ctx.storage().save(&entity).await?;
 
     // Save index (including environment index)
     let node: Node = entity.try_into()?;
