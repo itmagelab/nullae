@@ -38,7 +38,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
             if ip_addr.is_loopback() {
                 continue;
             }
-            
+
             let ip_str = ip_addr.to_string();
             // Create Ip entity
             match Ip::create(&ip_str, &node.hash, &ctx).await {
