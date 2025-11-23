@@ -244,8 +244,7 @@ impl Node {
         // Delete node entity and purge index
         let node_entity: Entity = self.into();
         let index = Index::from_entity(&node_entity)?;
-        let url = ctx.storage().build_url(&node_entity.path());
-        ctx.storage().pool().delete(&url).send().await?;
+        ctx.storage().delete(&node_entity).await?;
         index.purge(ctx).await?;
 
         Ok(())
@@ -257,25 +256,4 @@ fn hostname() -> anyhow::Result<String> {
     os_name
         .into_string()
         .map_err(|os| anyhow::anyhow!("Invalid UTF-8 in hostname: {:?}", os))
-}
-
-#[allow(dead_code)]
-fn ips() -> anyhow::Result<String> {
-    let interfaces = pnet::datalink::interfaces();
-    let ips: Vec<std::net::IpAddr> = interfaces
-        .iter()
-        .flat_map(|iface| iface.ips.iter())
-        .map(|ipnetwork| ipnetwork.ip())
-        .collect();
-    Ok(ips
-        .iter()
-        .map(|ip| ip.to_string())
-        .collect::<Vec<_>>()
-        .join("|"))
-}
-
-#[allow(dead_code)]
-fn hash(str: &str) -> anyhow::Result<String> {
-    let str = format!("{}|{}", str, ips()?);
-    Ok(str.hash())
 }

@@ -247,4 +247,10 @@ impl Storage for Consul {
         self.pool.delete(&url).send().await?;
         Ok(())
     }
+
+    async fn delete(&self, entity: &Entity) -> anyhow::Result<()> {
+        let url = self.build_url(&entity.path());
+        self.pool.delete(&url).send().await?;
+        Ok(())
+    }
 }
