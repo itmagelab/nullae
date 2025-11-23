@@ -22,8 +22,8 @@ pub struct Node {
     #[tabled(display("display::option", ""))]
     #[index]
     pub(crate) arch: Option<String>,
-    #[tabled(display("display_short_hash_option"))]
-    pub(crate) ip: Option<String>,
+    #[tabled(display("display_short_hash_vec_option"))]
+    pub(crate) ips: Option<Vec<String>>,
     #[tabled(display("display::option", ""))]
     pub(crate) cpu_cores: Option<usize>,
     #[tabled(display("display::option", ""))]
@@ -62,15 +62,19 @@ fn short_hash(hash: &str, _: &Node) -> String {
     hash[..SHORT_HASH].to_string()
 }
 
-fn display_short_hash_option(hash: &Option<String>) -> String {
-    match hash {
-        Some(h) => {
-            if h.len() > SHORT_HASH {
-                h[..SHORT_HASH].to_string()
-            } else {
-                h.to_string()
-            }
-        }
+fn display_short_hash_vec_option(hashes: &Option<Vec<String>>) -> String {
+    match hashes {
+        Some(hashes) => hashes
+            .iter()
+            .map(|h| {
+                if h.len() > SHORT_HASH {
+                    h[..SHORT_HASH].to_string()
+                } else {
+                    h.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(", "),
         None => String::new(),
     }
 }
@@ -95,8 +99,8 @@ impl std::fmt::Display for Node {
                 writeln!(f)?;
             }
         }
-        if let Some(ip) = &self.ip {
-            writeln!(f, "  → IP: {}", ip)?;
+        if let Some(ips) = &self.ips {
+            writeln!(f, "  → IPs: {}", ips.join(", "))?;
         }
         if let Some(cores) = self.cpu_cores {
             write!(f, "  → CPU: {} cores", cores)?;
