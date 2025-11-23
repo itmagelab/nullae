@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use tabled::{
     Tabled,
     settings::{
-        Format, Style,
-        object::{Columns, Object, Rows},
+        Format, Modify, Style, Width,
+        object::{Columns, Object, Rows, Segment},
         style::{HorizontalLine, LineText, VerticalLine},
     },
 };
@@ -159,6 +159,7 @@ pub trait EntityItem {
                 .verticals([(1, VerticalLine::inherit(Style::modern()))])
                 .remove_horizontal(),
         );
+        table.with(Modify::new(Segment::all()).with(Width::wrap(40)));
         table.with(LineText::new(title, Rows::first()).offset(1));
         table.modify(
             Columns::one(0).not(Rows::first()),
