@@ -57,7 +57,11 @@ impl Ip {
         entity.try_into()
     }
 
-    pub async fn create<S: Storage>(address: &str, parent_hash: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn create<S: Storage>(
+        address: &str,
+        parent_hash: &str,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Self> {
         let ip = Self::new(address, parent_hash)?;
         if let Ok(ip) = Ip::get(&ip.hash, ctx).await {
             return Ok(ip);

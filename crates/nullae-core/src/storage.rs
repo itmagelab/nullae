@@ -13,7 +13,11 @@ pub trait Storage {
     fn save(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
 
     /// Puts an index item
-    fn save_index(&self, path: &str, item: &Item) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn save_index(
+        &self,
+        path: &str,
+        item: &Item,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Creates an entity (returns existing if already exists)
     fn create(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
@@ -25,7 +29,11 @@ pub trait Storage {
     fn get(&self, hash: &str) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send;
 
     /// Finds entities by index
-    fn find_by_index(&self, index: &str, pattern: &str) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
+    fn find_by_index(
+        &self,
+        index: &str,
+        pattern: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
 
     /// Lists all entities
     fn list(&self) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;

@@ -167,12 +167,19 @@ impl Node {
         })
     }
 
-    pub async fn from_current_host<S: Storage>(domain: &Domain, ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn from_current_host<S: Storage>(
+        domain: &Domain,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Self> {
         let hostname = hostname()?;
         Self::create(&hostname, domain, ctx).await
     }
 
-    pub async fn create<S: Storage>(name: &str, domain: &Domain, ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn create<S: Storage>(
+        name: &str,
+        domain: &Domain,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Self> {
         let node = Self::new(name, &domain.hash)?;
         let domain = Domain::get(&domain.hash, ctx).await?;
         let mut domain_entity: Entity = domain.into();
