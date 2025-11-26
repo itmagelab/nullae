@@ -10,7 +10,7 @@ pub struct Index(Vec<Item>);
 #[derive(Serialize, Deserialize, Debug)]
 struct ItemData {
     key: String,
-    value: Vec<String>,
+    value: Vec<HashID>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -21,10 +21,10 @@ pub struct Item {
 
 impl Item {
     /// Creates a new Item from references, avoiding unnecessary cloning
-    pub fn new(kind: &str, key: &str, hash: &str) -> anyhow::Result<Self> {
+    pub fn new(kind: &str, key: &str, hash: &HashID) -> anyhow::Result<Self> {
         let data = ItemData {
             key: key.to_string(),
-            value: vec![hash.to_string()],
+            value: vec![hash.clone()],
         };
 
         Ok(Self {
@@ -41,11 +41,11 @@ impl Item {
         self.data.value.is_empty()
     }
 
-    fn values_mut(&mut self) -> &mut Vec<String> {
+    fn values_mut(&mut self) -> &mut Vec<HashID> {
         &mut self.data.value
     }
 
-    fn into_values(self) -> Vec<String> {
+    fn into_values(self) -> Vec<HashID> {
         self.data.value
     }
 
@@ -56,11 +56,11 @@ impl Item {
     }
 
     fn subtract(&mut self, item: Item) {
-        let set: HashSet<String> = item.into_values().into_iter().collect();
+        let set: HashSet<HashID> = item.into_values().into_iter().collect();
         self.values_mut().retain(|x| !set.contains(x));
     }
 
-    pub(crate) fn value(self) -> Vec<String> {
+    pub(crate) fn value(self) -> Vec<HashID> {
         self.data.value
     }
 

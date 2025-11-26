@@ -86,7 +86,7 @@ impl Consul {
             .into_iter()
             .map(|r| r.into_entity())
             .collect::<Result<Vec<_>, _>>()?;
-        entities.retain(|e| e.hash().contains(hash));
+        entities.retain(|e| e.hash().as_hex().contains(hash));
         if entities.len() > 1 {
             anyhow::bail!("duplicate entity found for hash {}", hash);
         };
@@ -182,7 +182,7 @@ impl Storage for Consul {
         };
 
         let item: Item = serde_json::from_value(record.value()?)?;
-        let uuids: std::collections::HashSet<String> = item.value().into_iter().collect();
+        let uuids: std::collections::HashSet<HashID> = item.value().into_iter().collect();
 
         // 2. Fetch all entities in one batch request
         let url = self.build_url(&format!("{BASE_PATH}/entity"));
@@ -202,11 +202,7 @@ impl Storage for Consul {
             .json::<Vec<Record>>()
             .await?
             .into_iter()
-            .filter_map(|r| {
-                r.into_entity()
-                    .ok()
-                    .filter(|e| uuids.contains(e.hash() as &str))
-            })
+            .filter_map(|r| r.into_entity().ok().filter(|e| uuids.contains(e.hash())))
             .collect();
 
         Ok(entities)

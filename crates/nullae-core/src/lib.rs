@@ -6,34 +6,9 @@ pub mod prelude;
 pub mod storage;
 
 use crate::index::Index;
-use serde::{Deserialize, Serialize};
 
 pub(crate) const BASE_PATH: &str = "0ae";
 pub(crate) const SHORT_HASH: usize = 8;
-
-#[derive(Default, Serialize, Deserialize, Debug)]
-pub struct Metadata {
-    created_at: chrono::NaiveDateTime,
-    updated_at: Option<chrono::NaiveDateTime>,
-    children: Option<Vec<String>>,
-}
-
-impl Metadata {
-    fn new() -> Self {
-        let created_at = chrono::Local::now().naive_local();
-        Self {
-            created_at,
-            ..Default::default()
-        }
-    }
-
-    pub fn update(mut self) -> Self {
-        let updated_at = chrono::Local::now().naive_local();
-        self.updated_at = Some(updated_at);
-
-        self
-    }
-}
 
 pub trait Hashable {
     fn hash(&self) -> String;
@@ -61,6 +36,16 @@ pub trait Indexable {
 #[cfg(test)]
 mod tests {
     use super::prelude::*;
+
+    #[tokio::test]
+    async fn test_some() {
+        dotenvy::dotenv().ok();
+        let ctx = Context::new().unwrap();
+        let domain = Domain::create("local", &ctx).await.unwrap();
+        let mut node = Node::create("local", &domain, &ctx).await.unwrap();
+        node.collect_host_info(&ctx).await.unwrap();
+        node.save(&ctx).await.unwrap();
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn random_nodes_domains() {

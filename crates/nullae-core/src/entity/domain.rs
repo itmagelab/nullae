@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::prelude::*;
 use nullae_macros::{Entity, Indexable};
 use serde::{Deserialize, Serialize};
@@ -8,7 +10,7 @@ use crate::entity::EntityItem;
 
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Domain {
-    pub(crate) hash: String,
+    pub(crate) hash: HashID,
     #[index]
     pub(crate) name: String,
     #[tabled(display("display::option", ""))]
@@ -27,15 +29,7 @@ impl std::fmt::Display for Domain {
     }
 }
 
-impl EntityItem for Domain {
-    fn hash<S>(mut self, text: S) -> Self
-    where
-        S: Into<String>,
-    {
-        self.hash = text.into();
-        self
-    }
-}
+impl EntityItem for Domain {}
 
 impl Domain {
     pub fn new<S>(name: S) -> anyhow::Result<Self>
@@ -55,7 +49,7 @@ impl Domain {
             );
         }
 
-        let hash = format!("{}|", &name).hash();
+        let hash = HashID::from_str(&format!("{}|", &name).hash())?;
         Ok(Self {
             hash,
             name,
@@ -63,8 +57,8 @@ impl Domain {
         })
     }
 
-    pub async fn get<S: Storage>(hash: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
-        let domains = ctx.storage().get(hash).await?;
+    pub async fn get<S: Storage>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
+        let domains = ctx.storage().get(&hash.as_hex()).await?;
         let Some(entity) = domains else {
             anyhow::bail!("Can't find domain for hash: {}", hash);
         };

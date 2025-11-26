@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::prelude::*;
 use nullae_macros::{Entity, Indexable};
 use serde::{Deserialize, Serialize};
@@ -7,7 +9,7 @@ use crate::entity::EntityItem;
 
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Ip {
-    pub(crate) hash: String,
+    pub(crate) hash: HashID,
     #[index]
     pub(crate) address: String,
 }
@@ -19,18 +21,10 @@ impl std::fmt::Display for Ip {
     }
 }
 
-impl EntityItem for Ip {
-    fn hash<S>(mut self, text: S) -> Self
-    where
-        S: Into<String>,
-    {
-        self.hash = text.into();
-        self
-    }
-}
+impl EntityItem for Ip {}
 
 impl Ip {
-    pub fn new<S>(address: S, parent_hash: &str) -> anyhow::Result<Self>
+    pub fn new<S>(address: S, parent_hash: &HashID) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
@@ -45,12 +39,12 @@ impl Ip {
             anyhow::bail!("Invalid IP address format: {}", address);
         }
 
-        let hash = format!("{}|{}", &address, parent_hash).hash();
+        let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).hash())?;
         Ok(Self { hash, address })
     }
 
-    pub async fn get<S: Storage>(hash: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
-        let ips = ctx.storage().get(hash).await?;
+    pub async fn get<S: Storage>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
+        let ips = ctx.storage().get(&hash.as_hex()).await?;
         let Some(entity) = ips else {
             anyhow::bail!("Can't find IP for hash: {}", hash);
         };
@@ -59,7 +53,7 @@ impl Ip {
 
     pub async fn create<S: Storage>(
         address: &str,
-        parent_hash: &str,
+        parent_hash: &HashID,
         ctx: &Context<S>,
     ) -> anyhow::Result<Self> {
         let ip = Self::new(address, parent_hash)?;

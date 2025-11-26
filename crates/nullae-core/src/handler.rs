@@ -29,7 +29,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
 
     // IP address - create Ip entity and store its hash
     let interfaces = pnet::datalink::interfaces();
-    let mut ip_hashes = Vec::new();
+    let mut children = Vec::new();
 
     for iface in interfaces {
         for ip_network in iface.ips {
@@ -43,7 +43,7 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
             // Create Ip entity
             match Ip::create(&ip_str, &node.hash, &ctx).await {
                 Ok(ip) => {
-                    ip_hashes.push(ip.hash);
+                    children.push(ip.hash);
                 }
                 Err(e) => {
                     tracing::warn!("Failed to create IP entity for {}: {}", ip_str, e);
@@ -52,18 +52,11 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
         }
     }
 
-    if !ip_hashes.is_empty() {
-        node.ips = Some(ip_hashes.clone());
+    if !children.is_empty() {
+        node.ips = Some(children.clone());
     }
 
-    // Save updated Node
-    let mut entity: Entity = node.into();
-
-    for hash in ip_hashes {
-        entity.add_child(&hash);
-    }
-
-    ctx.storage().save(&entity).await?;
+    let entity = node.save_with_children(children, &ctx).await?;
 
     // Save index (including environment index)
     let node: Node = entity.try_into()?;

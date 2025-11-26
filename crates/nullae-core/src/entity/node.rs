@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 use tabled::derive::display;
@@ -8,11 +10,11 @@ use crate::prelude::*;
 
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Indexable, Entity)]
 pub struct Node {
-    pub(crate) hash: String,
+    pub(crate) hash: HashID,
     #[index]
     pub(crate) hostname: String,
     #[tabled(display("short_hash", self))]
-    pub(crate) domain: String,
+    pub(crate) domain: HashID,
     #[tabled(display("display::option", ""))]
     pub(crate) description: Option<String>,
 
@@ -23,7 +25,7 @@ pub struct Node {
     #[index]
     pub(crate) arch: Option<String>,
     #[tabled(display("display_short_hash_vec_option"))]
-    pub(crate) ips: Option<Vec<String>>,
+    pub(crate) ips: Option<Vec<HashID>>,
     #[tabled(display("display::option", ""))]
     pub(crate) cpu_cores: Option<usize>,
     #[tabled(display("display::option", ""))]
@@ -58,17 +60,17 @@ fn display_tags(tags: &Option<Vec<String>>) -> String {
     }
 }
 
-fn short_hash(hash: &str, _: &Node) -> String {
-    hash[..SHORT_HASH].to_string()
+fn short_hash(hash: &HashID, _: &Node) -> String {
+    hash.short_hash()
 }
 
-fn display_short_hash_vec_option(hashes: &Option<Vec<String>>) -> String {
+fn display_short_hash_vec_option(hashes: &Option<Vec<HashID>>) -> String {
     match hashes {
         Some(hashes) => hashes
             .iter()
             .map(|h| {
-                if h.len() > SHORT_HASH {
-                    h[..SHORT_HASH].to_string()
+                if h.as_hex().len() > SHORT_HASH {
+                    h.short_hash()
                 } else {
                     h.to_string()
                 }
@@ -100,7 +102,14 @@ impl std::fmt::Display for Node {
             }
         }
         if let Some(ips) = &self.ips {
-            writeln!(f, "  → IPs: {}", ips.join(", "))?;
+            writeln!(
+                f,
+                "  → IPs: {}",
+                ips.iter()
+                    .map(|h| h.as_hex())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )?;
         }
         if let Some(cores) = self.cpu_cores {
             write!(f, "  → CPU: {} cores", cores)?;
@@ -125,30 +134,18 @@ impl std::fmt::Display for Node {
     }
 }
 
-impl EntityItem for Node {
-    fn hash<S>(mut self, text: S) -> Self
-    where
-        S: Into<String>,
-    {
-        self.hash = text.into();
-        self
-    }
-}
+impl EntityItem for Node {}
 
 impl Node {
-    pub fn new<S>(hostname: S, domain: S) -> anyhow::Result<Self>
+    pub fn new<S>(hostname: S, domain: &HashID) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
         let hostname = hostname.into();
-        let domain = domain.into();
+        let domain = domain.clone();
 
         if hostname.trim().is_empty() {
             anyhow::bail!("Node hostname cannot be empty or whitespace-only");
-        }
-
-        if domain.trim().is_empty() {
-            anyhow::bail!("Node domain cannot be empty or whitespace-only");
         }
 
         if hostname.len() > 255 {
@@ -158,7 +155,7 @@ impl Node {
             );
         }
 
-        let hash = format!("{}|{}", &hostname, &domain).hash();
+        let hash = HashID::from_str(&format!("{}|{}", &hostname, &domain).hash())?;
         Ok(Self {
             hostname,
             domain,
@@ -175,6 +172,26 @@ impl Node {
         Self::create(&hostname, domain, ctx).await
     }
 
+    pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
+        let entity: Entity = self.into();
+
+        ctx.storage().save(&entity).await
+    }
+
+    pub async fn save_with_children<S: Storage>(
+        self,
+        children: Vec<HashID>,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Entity> {
+        let mut entity: Entity = self.into();
+
+        for hash in children {
+            entity.add_child(&hash.as_hex())?;
+        }
+
+        ctx.storage().save(&entity).await
+    }
+
     pub async fn create<S: Storage>(
         name: &str,
         domain: &Domain,
@@ -183,7 +200,7 @@ impl Node {
         let node = Self::new(name, &domain.hash)?;
         let domain = Domain::get(&domain.hash, ctx).await?;
         let mut domain_entity: Entity = domain.into();
-        domain_entity.add_child(&node.hash);
+        domain_entity.add_child(&node.hash.as_hex())?;
         ctx.storage().save(&domain_entity).await?;
 
         let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
@@ -237,7 +254,7 @@ impl Node {
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let Some(mut entity) = ctx.storage().get(&self.domain).await? else {
+        let Some(mut entity) = ctx.storage().get(&self.domain.as_hex()).await? else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",
                 self.hash,
@@ -245,7 +262,7 @@ impl Node {
                 self.domain
             );
         };
-        entity.remove_child(&self.hash);
+        entity.remove_child(&self.hash.as_hex());
         ctx.storage().save(&entity).await?;
 
         // Delete node entity and purge index
