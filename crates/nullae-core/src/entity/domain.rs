@@ -92,7 +92,13 @@ impl Domain {
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let entity: Entity = self.into();
+        let entity = match ctx.storage().get(&self.hash.as_hex()).await? {
+            Some(d) => d,
+            None => {
+                let domain = Domain::get(&self.hash, ctx).await?;
+                domain.into()
+            }
+        };
         entity.delete(ctx).await?;
         Ok(())
     }

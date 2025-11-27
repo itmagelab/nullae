@@ -198,35 +198,35 @@ impl Node {
         ctx: &Context<S>,
     ) -> anyhow::Result<Self> {
         let node = Self::new(name, &domain.hash)?;
-        let domain = Domain::get(&domain.hash, ctx).await?;
-        let mut domain_entity: Entity = domain.into();
+        let mut domain_entity = match ctx.storage().get(&domain.hash.as_hex()).await? {
+            Some(d) => d,
+            None => {
+                let domain = Domain::get(&domain.hash, ctx).await?;
+                domain.into()
+            }
+        };
         domain_entity.add_child(&node.hash.as_hex())?;
         ctx.storage().save(&domain_entity).await?;
 
         let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
 
-        // Automatically save index
         created.index()?.save(ctx).await?;
 
         Ok(created)
     }
 
-    /// Collects information about the current host
     pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
         use sysinfo::System;
 
-        // OS information
         self.os_type = Some(std::env::consts::OS.to_string());
         self.arch = Some(std::env::consts::ARCH.to_string());
 
-        // System information
         let mut sys = System::new_all();
         sys.refresh_all();
 
         self.cpu_cores = Some(sys.cpus().len());
         self.total_memory_gb = Some(sys.total_memory() / 1024 / 1024 / 1024);
 
-        // Timestamps
         let now = chrono::Utc::now().timestamp();
         if self.created_at.is_none() {
             self.created_at = Some(now);
@@ -236,25 +236,22 @@ impl Node {
         Ok(())
     }
 
-    /// Updates only last_seen timestamp (for heartbeat)
     pub fn heartbeat(&mut self) {
         self.last_seen = Some(chrono::Utc::now().timestamp());
     }
 
-    /// Sets the environment
     pub fn with_environment(mut self, env: &str) -> Self {
         self.environment = Some(env.to_string());
         self
     }
 
-    /// Adds tags
     pub fn with_tags(mut self, tags: Vec<String>) -> Self {
         self.tags = Some(tags);
         self
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let Some(mut entity) = ctx.storage().get(&self.domain.as_hex()).await? else {
+        let Some(mut domain_entity) = ctx.storage().get(&self.domain.as_hex()).await? else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",
                 self.hash,
@@ -262,14 +259,66 @@ impl Node {
                 self.domain
             );
         };
-        entity.remove_child(&self.hash.as_hex());
-        ctx.storage().save(&entity).await?;
+        domain_entity.remove_child(&self.hash.as_hex());
+        ctx.storage().save(&domain_entity).await?;
 
-        // Delete node entity and purge index
         let node_entity: Entity = self.into();
         let index = Index::from_entity(&node_entity)?;
         ctx.storage().delete(&node_entity).await?;
         index.purge(ctx).await?;
+
+        Ok(())
+    }
+
+    pub async fn delete_batch<S: Storage>(
+        nodes: Vec<Self>,
+        ctx: &Context<S>,
+        batch_size: usize,
+    ) -> anyhow::Result<()> {
+        use futures::stream::{self, StreamExt};
+        use std::collections::HashMap;
+
+        let mut nodes_by_domain: HashMap<String, Vec<Self>> = HashMap::new();
+        for node in nodes {
+            nodes_by_domain
+                .entry(node.domain.as_hex())
+                .or_default()
+                .push(node);
+        }
+
+        stream::iter(nodes_by_domain)
+            .map(|(domain_hash, domain_nodes)| async move {
+                let Some(mut domain_entity) = ctx.storage().get(&domain_hash).await? else {
+                    anyhow::bail!("Can't find domain with hash: {}", domain_hash);
+                };
+
+                for node in &domain_nodes {
+                    domain_entity.remove_child(&node.hash.as_hex());
+                }
+
+                ctx.storage().save(&domain_entity).await?;
+
+                stream::iter(domain_nodes)
+                    .map(|node| async move {
+                        let node_entity: Entity = node.into();
+                        let index = Index::from_entity(&node_entity)?;
+                        ctx.storage().delete(&node_entity).await?;
+                        index.purge(ctx).await?;
+                        Ok::<(), anyhow::Error>(())
+                    })
+                    .buffer_unordered(batch_size)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+
+                Ok::<(), anyhow::Error>(())
+            })
+            .buffer_unordered(batch_size)
+            .collect::<Vec<_>>()
+            .await
+            .into_iter()
+            .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(())
     }

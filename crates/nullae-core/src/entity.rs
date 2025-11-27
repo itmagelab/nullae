@@ -220,10 +220,10 @@ impl Entity {
             }
         }
 
-        view(nodes, "Node");
-        view(domains, "Node");
-        view(ips, "Node");
-        view(urls, "Node");
+        view(nodes, "Nodes");
+        view(domains, "Domains");
+        view(ips, "IPs");
+        view(urls, "Urls");
         Ok(())
     }
 }
