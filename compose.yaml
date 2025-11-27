@@ -10,17 +10,17 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
 
-  0api:
-    image: wilful/nullae:${NULLAE_VERSION:-latest}
-    build:
-      context: .
-      target: final
-    restart: always
-    scale: 1
-    command: /bin/0api
-    environment:
-      RUST_LOG: debug
-      NULLAE_CONSUL_URL: http://caddy:8500
+  # 0api:
+  #   image: wilful/nullae:${NULLAE_VERSION:-latest}
+  #   build:
+  #     context: .
+  #     target: final
+  #   restart: always
+  #   scale: 1
+  #   command: /bin/0api
+  #   environment:
+  #     RUST_LOG: debug
+  #     NULLAE_CONSUL_URL: http://caddy:8500
 
   consul1:
     image: consul:1.15.4

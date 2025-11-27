@@ -164,16 +164,13 @@ impl Entity {
             anyhow::bail!("Can't delete entity with children");
         }
 
-        // Get index before deleting entity
         let index = Index::from_entity(&self)?;
 
         match self.kind {
             EntityKind::Node { inner } => inner.delete(ctx).await?,
             _ => {
-                // Delete entity from repository
                 ctx.storage().delete(&self).await?;
 
-                // Purge index entries
                 index.purge(ctx).await?;
             }
         }
@@ -206,7 +203,7 @@ impl Entity {
         }
     }
 
-    pub fn view(vec: Vec<Self>) {
+    pub async fn view<S: Storage>(vec: Vec<Self>, ctx: &Context<S>) -> anyhow::Result<()> {
         let mut nodes = Vec::new();
         let mut domains = Vec::new();
         let mut ips = Vec::new();
@@ -214,50 +211,46 @@ impl Entity {
 
         for entity in vec {
             match entity.kind {
-                EntityKind::Node { inner } => nodes.push(inner),
-                EntityKind::Domain { inner } => domains.push(inner),
-                EntityKind::Ip { inner } => ips.push(inner),
-                EntityKind::Url { inner } => urls.push(inner),
+                EntityKind::Node { inner } => {
+                    nodes.push(NodeView::try_from_node_async(&inner, ctx).await?)
+                }
+                EntityKind::Domain { inner } => domains.push(DomainView::from(&inner)),
+                EntityKind::Ip { inner } => ips.push(IpView::from(&inner)),
+                EntityKind::Url { inner } => urls.push(UrlView::from(&inner)),
             }
         }
 
-        if !nodes.is_empty() {
-            Node::view(nodes, "Node");
-        }
-        if !domains.is_empty() {
-            Domain::view(domains, "Domain");
-        }
-        if !ips.is_empty() {
-            Ip::view(ips, "Ip");
-        }
-        if !urls.is_empty() {
-            Url::view(urls, "Url");
-        }
+        view(nodes, "Node");
+        view(domains, "Node");
+        view(ips, "Node");
+        view(urls, "Node");
+        Ok(())
     }
 }
 
-pub trait EntityItem {
-    fn view(vec: Vec<Self>, title: &str)
-    where
-        Self: Sized + Tabled,
-    {
-        let mut table = tabled::Table::new(vec);
-        table.with(
-            Style::modern()
-                .horizontals([(1, HorizontalLine::inherit(Style::modern()))])
-                .verticals([(1, VerticalLine::inherit(Style::modern()))])
-                .remove_horizontal(),
-        );
-        table.with(Modify::new(Segment::all()).with(Width::wrap(40)));
-        table.with(LineText::new(title, Rows::first()).offset(1));
-        table.modify(
-            Columns::one(0).not(Rows::first()),
-            Format::content(|s| {
-                let short: String = s.chars().take(SHORT_HASH).collect();
-                short
-            }),
-        );
-        println!("{table}");
-        println!();
+fn view<T>(vec: Vec<T>, title: &str)
+where
+    T: Sized + Tabled,
+{
+    if vec.is_empty() {
+        return;
     }
+    let mut table = tabled::Table::new(vec);
+    table.with(
+        Style::modern()
+            .horizontals([(1, HorizontalLine::inherit(Style::modern()))])
+            .verticals([(1, VerticalLine::inherit(Style::modern()))])
+            .remove_horizontal(),
+    );
+    table.with(Modify::new(Segment::all()).with(Width::wrap(40)));
+    table.with(LineText::new(title, Rows::first()).offset(1));
+    table.modify(
+        Columns::one(0).not(Rows::first()),
+        Format::content(|s| {
+            let short: String = s.chars().take(SHORT_HASH).collect();
+            short
+        }),
+    );
+    println!("{table}");
+    println!();
 }

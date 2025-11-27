@@ -28,6 +28,6 @@ nullae-macros.workspace = true
 futures = "0.3.31"
 url.workspace = true
 dotenvy.workspace = true
-sysinfo = "0.31"
+sysinfo = "0.37"
 local-ip-address = "0.6"
 async-trait = "0.1"

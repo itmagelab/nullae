@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 use tabled::derive::display;
 
-use crate::entity::EntityItem;
-
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Domain {
     pub(crate) hash: HashID,
@@ -15,6 +13,23 @@ pub struct Domain {
     pub(crate) name: String,
     #[tabled(display("display::option", ""))]
     pub(crate) description: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tabled)]
+pub struct DomainView {
+    pub(crate) hash: String,
+    pub(crate) name: String,
+    pub(crate) description: String,
+}
+
+impl From<&Domain> for DomainView {
+    fn from(d: &Domain) -> Self {
+        DomainView {
+            hash: d.hash.to_string(),
+            name: d.name.clone(),
+            description: d.description.clone().unwrap_or_default(),
+        }
+    }
 }
 
 impl std::fmt::Display for Domain {
@@ -28,8 +43,6 @@ impl std::fmt::Display for Domain {
         writeln!(f, "  → Name: {}", self.name)
     }
 }
-
-impl EntityItem for Domain {}
 
 impl Domain {
     pub fn new<S>(name: S) -> anyhow::Result<Self>

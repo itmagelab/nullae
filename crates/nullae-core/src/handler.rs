@@ -1,11 +1,10 @@
 use crate::prelude::*;
 
-pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
+pub async fn discovery() -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let domain = Domain::new(&domain)?.save(&ctx).await?;
 
     // Create Node from current host
-    let mut node = Node::from_current_host(&domain, &ctx).await?;
+    let mut node = Node::from_current_host(&ctx).await?;
 
     // Collect host information
     node.collect_host_info(&ctx).await?;
@@ -58,7 +57,6 @@ pub async fn discovery(domain: String) -> Result<(), anyhow::Error> {
 
     let entity = node.save_with_children(children, &ctx).await?;
 
-    // Save index (including environment index)
     let node: Node = entity.try_into()?;
     node.index()?.save(&ctx).await?;
 
@@ -73,7 +71,7 @@ pub async fn list() -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
     let entities = ctx.storage().list().await?;
 
-    Entity::view(entities);
+    Entity::view(entities, &ctx).await?;
 
     Ok(())
 }

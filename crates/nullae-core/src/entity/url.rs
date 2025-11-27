@@ -3,7 +3,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
-use crate::{SHORT_HASH, entity::EntityItem, prelude::*};
+use crate::{SHORT_HASH, prelude::*};
 
 #[derive(Serialize, Deserialize, Debug, Tabled, Indexable, Entity)]
 pub struct Url {
@@ -11,6 +11,23 @@ pub struct Url {
     #[index]
     pub(crate) slug: String,
     pub(crate) url: url::Url,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tabled)]
+pub struct UrlView {
+    pub hash: String,
+    pub slug: String,
+    pub url: String,
+}
+
+impl From<&Url> for UrlView {
+    fn from(u: &Url) -> Self {
+        UrlView {
+            hash: u.hash.to_string(),
+            slug: u.slug.clone(),
+            url: u.url.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for Url {
@@ -21,8 +38,6 @@ impl std::fmt::Display for Url {
         writeln!(f, "  → Hash: {}", self.hash)
     }
 }
-
-impl EntityItem for Url {}
 
 impl Url {
     fn new(url: &str) -> anyhow::Result<Self> {

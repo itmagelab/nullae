@@ -5,13 +5,26 @@ use nullae_macros::{Entity, Indexable};
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
-use crate::entity::EntityItem;
-
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Ip {
     pub(crate) hash: HashID,
     #[index]
     pub(crate) address: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Tabled)]
+pub struct IpView {
+    pub hash: String,
+    pub address: String,
+}
+
+impl From<&Ip> for IpView {
+    fn from(ip: &Ip) -> Self {
+        IpView {
+            hash: ip.hash.to_string(),
+            address: ip.address.clone(),
+        }
+    }
 }
 
 impl std::fmt::Display for Ip {
@@ -20,8 +33,6 @@ impl std::fmt::Display for Ip {
         writeln!(f, "  → Hash: {}", self.hash)
     }
 }
-
-impl EntityItem for Ip {}
 
 impl Ip {
     pub fn new<S>(address: S, parent_hash: &HashID) -> anyhow::Result<Self>

@@ -18,10 +18,7 @@ Some description
 "#
 )]
 pub(crate) enum Commands {
-    Discovery {
-        #[arg(short, long, default_value_t = String::from("local"))]
-        domain: String,
-    },
+    Discovery,
     List,
     Delete {
         #[arg(long, short)]
@@ -60,7 +57,7 @@ pub async fn main() {
     };
 
     let result = match args.command {
-        Some(Commands::Discovery { domain }) => handler::discovery(domain).await,
+        Some(Commands::Discovery) => handler::discovery().await,
         Some(Commands::List) => handler::list().await,
         Some(Commands::Delete { pattern }) => handler::delete(pattern).await,
         Some(Commands::Show { pattern }) => handler::show(pattern).await,

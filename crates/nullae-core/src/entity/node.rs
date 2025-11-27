@@ -2,82 +2,84 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
-use tabled::derive::display;
 
-use crate::SHORT_HASH;
-use crate::entity::EntityItem;
 use crate::prelude::*;
 
-#[derive(Default, Serialize, Deserialize, Debug, Tabled, Indexable, Entity)]
+#[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
 pub struct Node {
     pub(crate) hash: HashID,
     #[index]
     pub(crate) hostname: String,
-    #[tabled(display("short_hash", self))]
     pub(crate) domain: HashID,
-    #[tabled(display("display::option", ""))]
     pub(crate) description: Option<String>,
-
-    // Host metrics
-    #[tabled(display("display::option", ""))]
     pub(crate) os_type: Option<String>,
-    #[tabled(display("display::option", ""))]
     #[index]
     pub(crate) arch: Option<String>,
-    #[tabled(display("display_short_hash_vec_option"))]
     pub(crate) ips: Option<Vec<HashID>>,
-    #[tabled(display("display::option", ""))]
     pub(crate) cpu_cores: Option<usize>,
-    #[tabled(display("display::option", ""))]
     pub(crate) total_memory_gb: Option<u64>,
-    #[tabled(display("display::option", ""))]
     pub(crate) created_at: Option<i64>,
-    #[tabled(display("display_timestamp"))]
     pub(crate) last_seen: Option<i64>,
-    #[tabled(display("display::option", ""))]
     pub(crate) environment: Option<String>,
-    #[tabled(display("display_tags"))]
     pub(crate) tags: Option<Vec<String>>,
 }
 
-fn display_timestamp(ts: &Option<i64>) -> String {
-    match ts {
-        Some(ts) => {
-            if let Some(datetime) = chrono::DateTime::from_timestamp(*ts, 0) {
-                datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-            } else {
-                ts.to_string()
-            }
-        }
-        None => String::new(),
-    }
+#[derive(Debug, Serialize, Deserialize, Tabled)]
+pub struct NodeView {
+    pub hash: String,
+    pub hostname: String,
+    pub domain: String,
+    pub description: String,
+    pub os_type: String,
+    pub arch: String,
+    pub ips: String,
+    pub cpu_cores: String,
+    pub total_memory_gb: String,
+    pub last_seen: String,
+    pub environment: String,
+    pub tags: String,
 }
 
-fn display_tags(tags: &Option<Vec<String>>) -> String {
-    match tags {
-        Some(tags) => tags.join(", "),
-        None => String::new(),
-    }
-}
-
-fn short_hash(hash: &HashID, _: &Node) -> String {
-    hash.short_hash()
-}
-
-fn display_short_hash_vec_option(hashes: &Option<Vec<HashID>>) -> String {
-    match hashes {
-        Some(hashes) => hashes
-            .iter()
-            .map(|h| {
-                if h.as_hex().len() > SHORT_HASH {
-                    h.short_hash()
-                } else {
-                    h.to_string()
-                }
-            })
-            .collect::<Vec<_>>()
-            .join(", "),
-        None => String::new(),
+impl NodeView {
+    pub(crate) async fn try_from_node_async<S: Storage>(
+        n: &Node,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Self> {
+        let hostname = n.hostname.clone();
+        let domain = n.domain.clone();
+        let domain = Domain::get(&domain, ctx).await?.name;
+        Ok(NodeView {
+            hash: n.hash.to_string(),
+            hostname,
+            domain,
+            description: n.description.clone().unwrap_or_default(),
+            os_type: n.os_type.clone().unwrap_or_default(),
+            arch: n.arch.clone().unwrap_or_default(),
+            ips: n
+                .ips
+                .as_ref()
+                .map(|v| {
+                    v.iter()
+                        .map(|h| h.short_hash())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_default(),
+            cpu_cores: n.cpu_cores.map(|x| x.to_string()).unwrap_or_default(),
+            total_memory_gb: n.total_memory_gb.map(|x| x.to_string()).unwrap_or_default(),
+            last_seen: n
+                .last_seen
+                .map(|x| {
+                    if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
+                        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                    } else {
+                        x.to_string()
+                    }
+                })
+                .unwrap_or_default(),
+            environment: n.environment.clone().unwrap_or_default(),
+            tags: n.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default(),
+        })
     }
 }
 
@@ -134,8 +136,6 @@ impl std::fmt::Display for Node {
     }
 }
 
-impl EntityItem for Node {}
-
 impl Node {
     pub fn new<S>(hostname: S, domain: &HashID) -> anyhow::Result<Self>
     where
@@ -164,12 +164,12 @@ impl Node {
         })
     }
 
-    pub async fn from_current_host<S: Storage>(
-        domain: &Domain,
-        ctx: &Context<S>,
-    ) -> anyhow::Result<Self> {
-        let hostname = hostname()?;
-        Self::create(&hostname, domain, ctx).await
+    pub async fn from_current_host<S: Storage>(ctx: &Context<S>) -> anyhow::Result<Self> {
+        let (hostname, domain) = get_host_info();
+        let domain = Domain::new(domain)?;
+
+        let domain = domain.save(ctx).await?;
+        Self::create(&hostname, &domain, ctx).await
     }
 
     pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
@@ -275,9 +275,13 @@ impl Node {
     }
 }
 
-fn hostname() -> anyhow::Result<String> {
-    let os_name = hostname::get()?;
-    os_name
-        .into_string()
-        .map_err(|os| anyhow::anyhow!("Invalid UTF-8 in hostname: {:?}", os))
+fn get_host_info() -> (String, String) {
+    let fqdn_osstr = hostname::get().unwrap_or_default();
+    let fqdn = fqdn_osstr.to_string_lossy().to_string();
+
+    let parts: Vec<&str> = fqdn.splitn(2, '.').collect();
+    let hostname = parts.first().unwrap_or(&"").to_string();
+    let domain = parts.get(1).unwrap_or(&"").to_string();
+
+    (hostname, domain)
 }
