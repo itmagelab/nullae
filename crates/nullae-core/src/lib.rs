@@ -41,10 +41,12 @@ mod tests {
     async fn test_some() {
         dotenvy::dotenv().ok();
         let ctx = Context::new().unwrap();
-        let domain = Domain::create("local", &ctx).await.unwrap();
-        let mut node = Node::create("local", &domain, &ctx).await.unwrap();
+        let domain = Domain::create("testing", &ctx).await.unwrap();
+        let mut node = Node::create("local-1", &domain, &ctx).await.unwrap();
         node.collect_host_info(&ctx).await.unwrap();
-        node.save(&ctx).await.unwrap();
+        let node = node.save(&ctx).await.unwrap();
+        node.delete(&ctx).await.unwrap();
+        domain.delete(&ctx).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -55,8 +57,7 @@ mod tests {
 
         let ctx = Context::new().unwrap();
 
-        // Create 5 different domains
-        let domains: Vec<Domain> = stream::iter(0..5)
+        let domains: Vec<Domain> = stream::iter(0..10)
             .map(|i| {
                 let ctx = &ctx;
                 async move { Domain::create(&format!("domain-{}", i), ctx).await.unwrap() }
@@ -65,7 +66,6 @@ mod tests {
             .collect()
             .await;
 
-        // Create 100 nodes randomly distributed across domains
         let nodes: Vec<Node> = stream::iter(0..100)
             .map(|i| {
                 let ctx = &ctx;
@@ -80,17 +80,8 @@ mod tests {
             .collect()
             .await;
 
-        // Cleanup: delete all nodes
-        stream::iter(nodes)
-            .map(|node| {
-                let ctx = &ctx;
-                async move { node.delete(ctx).await.unwrap() }
-            })
-            .buffer_unordered(50)
-            .collect::<()>()
-            .await;
+        Node::delete_batch(nodes, &ctx, 10).await.unwrap();
 
-        // Cleanup: delete all domains
         stream::iter(domains)
             .map(|domain| {
                 let ctx = &ctx;
