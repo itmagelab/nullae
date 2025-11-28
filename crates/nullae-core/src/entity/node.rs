@@ -15,8 +15,26 @@ pub struct OsInfo {
 /// Hardware information
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct HardwareInfo {
+    pub cpu_model: String,
     pub cpu_cores: usize,
     pub total_memory_gb: u64,
+    pub memory_modules: Option<Vec<MemoryModule>>,
+    pub storage: Option<Vec<StorageDevice>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MemoryModule {
+    pub label: String,
+    pub size: u64,
+    pub model: Option<String>,
+    pub speed_mhz: Option<u64>,
+    pub manufacturer: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StorageDevice {
+    pub model: String,
+    pub size: u64,
 }
 
 /// Network information
@@ -46,15 +64,16 @@ pub struct NodeView {
     pub hash: String,
     pub hostname: String,
     pub domain: String,
-    pub description: String,
     pub os_type: String,
     pub arch: String,
     pub ips: String,
     pub cpu_cores: String,
     pub total_memory_gb: String,
+    pub storage: String,
     pub last_seen: String,
     pub environment: String,
     pub tags: String,
+    pub description: String,
 }
 
 impl NodeView {
@@ -66,6 +85,17 @@ impl NodeView {
         let domain = n.domain.clone();
         let domain = Domain::get(&domain, ctx).await?.name;
         let ips = n.ips(ctx).await?;
+
+        let storage = n
+            .hardware
+            .as_ref()
+            .and_then(|h| h.storage.as_ref())
+            .map(|s| {
+                let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
+                format!("{} GB", total)
+            })
+            .unwrap_or_default();
+
         Ok(NodeView {
             hash: n.hash.to_string(),
             hostname,
@@ -92,6 +122,7 @@ impl NodeView {
                 .as_ref()
                 .map(|hw| hw.total_memory_gb.to_string())
                 .unwrap_or_default(),
+            storage,
             last_seen: n.last_seen(),
             environment: n.environment.clone().unwrap_or_default(),
             tags: n.tags(),
@@ -114,26 +145,48 @@ impl std::fmt::Display for Node {
         if let Some(os_info) = &self.os_info {
             writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
         }
-        if let Some(network) = &self.network {
-            if !network.ips.is_empty() {
-                writeln!(
-                    f,
-                    "  → IPs: {}",
-                    network
-                        .ips
-                        .iter()
-                        .map(|h| h.as_hex())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )?;
-            }
+        if let Some(network) = &self.network
+            && !network.ips.is_empty()
+        {
+            let ips = network
+                .ips
+                .iter()
+                .map(|h| h.as_hex())
+                .collect::<Vec<_>>()
+                .join(" ")
+                .wrap(40, None);
+            writeln!(f, "  → IPs: \n{}", ips)?;
         }
         if let Some(hardware) = &self.hardware {
             writeln!(
                 f,
-                "  → CPU: {} cores, {} GB RAM",
-                hardware.cpu_cores, hardware.total_memory_gb
+                "  → CPU: {} ({} cores), {} GB RAM",
+                hardware.cpu_model, hardware.cpu_cores, hardware.total_memory_gb
             )?;
+            if let Some(modules) = &hardware.memory_modules {
+                for module in modules {
+                    write!(
+                        f,
+                        "  → RAM: {} ({} GB)",
+                        module.label,
+                        module.size / 1024 / 1024 / 1024
+                    )?;
+                    if let Some(speed) = module.speed_mhz {
+                        write!(f, " @ {} MHz", speed)?;
+                    }
+                    writeln!(f)?;
+                }
+            }
+            if let Some(storage) = &hardware.storage {
+                for disk in storage {
+                    writeln!(
+                        f,
+                        "  → Disk: {} ({:.2} GB)",
+                        disk.model,
+                        disk.size as f64 / 1024.0 / 1024.0 / 1024.0
+                    )?;
+                }
+            }
         }
 
         // Operational information
@@ -230,7 +283,7 @@ impl Node {
     }
 
     pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
-        use sysinfo::System;
+        use sysinfo::{Disks, System};
 
         self.os_info = Some(OsInfo {
             os_type: std::env::consts::OS.to_string(),
@@ -240,9 +293,33 @@ impl Node {
         let mut sys = System::new_all();
         sys.refresh_all();
 
+        let disks = Disks::new_with_refreshed_list();
+        let mut unique_disks = std::collections::HashSet::new();
+        let storage = disks
+            .iter()
+            .filter(|disk| {
+                unique_disks.insert((
+                    disk.name().to_string_lossy().to_string(),
+                    disk.total_space(),
+                    disk.available_space(),
+                ))
+            })
+            .map(|disk| StorageDevice {
+                model: disk.name().to_string_lossy().to_string(),
+                size: disk.total_space(),
+            })
+            .collect();
+
         self.hardware = Some(HardwareInfo {
+            cpu_model: sys
+                .cpus()
+                .first()
+                .map(|cpu| cpu.brand().to_string())
+                .unwrap_or_else(|| "Unknown CPU".to_string()),
             cpu_cores: sys.cpus().len(),
             total_memory_gb: sys.total_memory() / 1024 / 1024 / 1024,
+            memory_modules: None, // Not supported by sysinfo automatically
+            storage: Some(storage),
         });
 
         let now = chrono::Utc::now().timestamp();
