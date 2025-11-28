@@ -12,7 +12,7 @@ pub(crate) const SHORT_HASH: usize = 8;
 
 pub trait Hashable {
     fn hash(&self) -> String;
-    fn wrap(&self, max_width: usize) -> String;
+    fn wrap(&self, max_width: usize, max_lines: Option<usize>) -> String;
 }
 
 impl Hashable for str {
@@ -22,7 +22,7 @@ impl Hashable for str {
         hasher.update(self.as_bytes());
         hex::encode(hasher.finalize())
     }
-    fn wrap(&self, max_width: usize) -> String {
+    fn wrap(&self, max_width: usize, max_lines: Option<usize>) -> String {
         if max_width == 0 {
             return self.to_string();
         }
@@ -62,6 +62,14 @@ impl Hashable for str {
             result.push(current_line);
         }
 
+        // Truncate if max_lines is specified and exceeded
+        if let Some(max) = max_lines
+            && result.len() > max
+        {
+            result.truncate(max);
+            result.push("...".to_string());
+        }
+
         result.join("\n")
     }
 }
@@ -70,8 +78,8 @@ impl Hashable for String {
     fn hash(&self) -> String {
         self.as_str().hash()
     }
-    fn wrap(&self, max_width: usize) -> String {
-        self.as_str().wrap(max_width)
+    fn wrap(&self, max_width: usize, max_lines: Option<usize>) -> String {
+        self.as_str().wrap(max_width, max_lines)
     }
 }
 
@@ -141,7 +149,7 @@ mod tests {
     #[test]
     fn test_wrap_text_basic() {
         let text = "This is a very long line that needs to be wrapped";
-        let wrapped = str::wrap(text, 20);
+        let wrapped = str::wrap(text, 20, None);
 
         for line in wrapped.lines() {
             assert!(line.len() <= 20, "Line '{}' exceeds max width", line);
@@ -153,21 +161,21 @@ mod tests {
     #[test]
     fn test_wrap_text_short() {
         let text = "Short text";
-        let wrapped = str::wrap(text, 50);
+        let wrapped = str::wrap(text, 50, None);
         assert_eq!(wrapped, text);
     }
 
     #[test]
     fn test_wrap_text_exact_width() {
         let text = "Hello world";
-        let wrapped = str::wrap(text, 11);
+        let wrapped = str::wrap(text, 11, None);
         assert_eq!(wrapped, "Hello world");
     }
 
     #[test]
     fn test_wrap_text_long_word() {
         let text = "This verylongwordthatexceedswidth fits";
-        let wrapped = str::wrap(text, 10);
+        let wrapped = str::wrap(text, 10, None);
 
         assert!(wrapped.contains("verylongwordthatexceedswidth"));
     }
@@ -175,14 +183,50 @@ mod tests {
     #[test]
     fn test_wrap_text_empty() {
         let text = "";
-        let wrapped = str::wrap(text, 10);
+        let wrapped = str::wrap(text, 10, None);
         assert_eq!(wrapped, "");
     }
 
     #[test]
     fn test_wrap_text_zero_width() {
         let text = "Some text";
-        let wrapped = str::wrap(text, 0);
+        let wrapped = str::wrap(text, 0, None);
         assert_eq!(wrapped, text);
+    }
+
+    #[test]
+    fn test_wrap_text_max_lines() {
+        let text = "This is a very long line that needs to be wrapped into many lines to test the max lines feature";
+        let wrapped = str::wrap(text, 10, Some(3));
+
+        let lines: Vec<&str> = wrapped.lines().collect();
+        assert_eq!(lines.len(), 4); // 3 lines + "..."
+        assert_eq!(lines.last().unwrap(), &"...");
+    }
+
+    #[test]
+    fn test_wrap_text_max_lines_not_exceeded() {
+        let text = "Short text here";
+        let wrapped = str::wrap(text, 10, Some(5));
+
+        let lines: Vec<&str> = wrapped.lines().collect();
+        assert!(lines.len() <= 5);
+        assert!(!wrapped.contains("..."));
+    }
+
+    #[test]
+    fn test_wrap_text_max_lines_exact() {
+        let text = "one two three four five six seven eight nine ten";
+        // First, get the actual line count without truncation
+        let full_wrapped = str::wrap(text, 5, None);
+        let actual_lines = full_wrapped.lines().count();
+
+        // Now wrap with max_lines equal to actual line count
+        let wrapped = str::wrap(text, 5, Some(actual_lines));
+        let lines: Vec<&str> = wrapped.lines().collect();
+
+        // Should have exactly the same number of lines, no truncation
+        assert_eq!(lines.len(), actual_lines);
+        assert!(!wrapped.ends_with("..."));
     }
 }
