@@ -10,6 +10,7 @@ pub struct Ip {
     pub(crate) hash: HashID,
     #[index]
     pub(crate) address: String,
+    pub prefix: u8,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]
@@ -20,9 +21,10 @@ pub struct IpView {
 
 impl From<&Ip> for IpView {
     fn from(ip: &Ip) -> Self {
+        let address = format!("{}/{}", ip.address, ip.prefix);
         IpView {
             hash: ip.hash.to_string(),
-            address: ip.address.clone(),
+            address,
         }
     }
 }
@@ -35,7 +37,7 @@ impl std::fmt::Display for Ip {
 }
 
 impl Ip {
-    pub fn new<S>(address: S, parent_hash: &HashID) -> anyhow::Result<Self>
+    pub fn new<S>(address: S, prefix: u8, parent_hash: &HashID) -> anyhow::Result<Self>
     where
         S: Into<String>,
     {
@@ -51,7 +53,11 @@ impl Ip {
         }
 
         let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).hash())?;
-        Ok(Self { hash, address })
+        Ok(Self {
+            hash,
+            address,
+            prefix,
+        })
     }
 
     pub async fn get<S: Storage>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
@@ -64,10 +70,11 @@ impl Ip {
 
     pub async fn create<S: Storage>(
         address: &str,
+        prefix: u8,
         parent_hash: &HashID,
         ctx: &Context<S>,
     ) -> anyhow::Result<Self> {
-        let ip = Self::new(address, parent_hash)?;
+        let ip = Self::new(address, prefix, parent_hash)?;
         if let Ok(ip) = Ip::get(&ip.hash, ctx).await {
             return Ok(ip);
         };

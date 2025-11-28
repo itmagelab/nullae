@@ -1,9 +1,54 @@
-use std::str::FromStr;
+use std::{net::IpAddr, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
 use crate::prelude::*;
+
+/// Operating system information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OsInfo {
+    pub os_type: String,
+    pub arch: String,
+}
+
+/// Hardware information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HardwareInfo {
+    pub cpu_model: String,
+    pub cpu_cores: usize,
+    pub total_memory_gb: u64,
+    pub memory_modules: Option<Vec<MemoryModule>>,
+    pub storage: Option<Vec<StorageDevice>>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MemoryModule {
+    pub label: String,
+    pub size: u64,
+    pub model: Option<String>,
+    pub speed_mhz: Option<u64>,
+    pub manufacturer: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StorageDevice {
+    pub model: String,
+    pub size: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub mac: Option<String>,
+    pub ips: Vec<HashID>,
+}
+
+/// Network information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NetworkInfo {
+    pub interfaces: Vec<NetworkInterface>,
+}
 
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
 pub struct Node {
@@ -12,12 +57,9 @@ pub struct Node {
     pub(crate) hostname: String,
     pub(crate) domain: HashID,
     pub(crate) description: Option<String>,
-    pub(crate) os_type: Option<String>,
-    #[index]
-    pub(crate) arch: Option<String>,
-    pub(crate) ips: Option<Vec<HashID>>,
-    pub(crate) cpu_cores: Option<usize>,
-    pub(crate) total_memory_gb: Option<u64>,
+    pub(crate) os_info: Option<OsInfo>,
+    pub(crate) hardware: Option<HardwareInfo>,
+    pub(crate) network: Option<NetworkInfo>,
     pub(crate) created_at: Option<i64>,
     pub(crate) last_seen: Option<i64>,
     pub(crate) environment: Option<String>,
@@ -29,15 +71,16 @@ pub struct NodeView {
     pub hash: String,
     pub hostname: String,
     pub domain: String,
-    pub description: String,
     pub os_type: String,
     pub arch: String,
     pub ips: String,
     pub cpu_cores: String,
     pub total_memory_gb: String,
+    pub storage: String,
     pub last_seen: String,
     pub environment: String,
     pub tags: String,
+    pub description: String,
 }
 
 impl NodeView {
@@ -48,37 +91,48 @@ impl NodeView {
         let hostname = n.hostname.clone();
         let domain = n.domain.clone();
         let domain = Domain::get(&domain, ctx).await?.name;
+        let ips = n.ips(ctx).await?;
+
+        let storage = n
+            .hardware
+            .as_ref()
+            .and_then(|h| h.storage.as_ref())
+            .map(|s| {
+                let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
+                format!("{} GB", total)
+            })
+            .unwrap_or_default();
+
         Ok(NodeView {
             hash: n.hash.to_string(),
             hostname,
             domain,
             description: n.description.clone().unwrap_or_default(),
-            os_type: n.os_type.clone().unwrap_or_default(),
-            arch: n.arch.clone().unwrap_or_default(),
-            ips: n
-                .ips
+            os_type: n
+                .os_info
                 .as_ref()
-                .map(|v| {
-                    v.iter()
-                        .map(|h| h.short_hash())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                })
+                .map(|os| os.os_type.clone())
                 .unwrap_or_default(),
-            cpu_cores: n.cpu_cores.map(|x| x.to_string()).unwrap_or_default(),
-            total_memory_gb: n.total_memory_gb.map(|x| x.to_string()).unwrap_or_default(),
-            last_seen: n
-                .last_seen
-                .map(|x| {
-                    if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-                    } else {
-                        x.to_string()
-                    }
-                })
+            arch: n
+                .os_info
+                .as_ref()
+                .map(|os| os.arch.clone())
                 .unwrap_or_default(),
+            ips,
+            cpu_cores: n
+                .hardware
+                .as_ref()
+                .map(|hw| hw.cpu_cores.to_string())
+                .unwrap_or_default(),
+            total_memory_gb: n
+                .hardware
+                .as_ref()
+                .map(|hw| hw.total_memory_gb.to_string())
+                .unwrap_or_default(),
+            storage,
+            last_seen: n.last_seen(),
             environment: n.environment.clone().unwrap_or_default(),
-            tags: n.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default(),
+            tags: n.tags(),
         })
     }
 }
@@ -95,30 +149,57 @@ impl std::fmt::Display for Node {
         writeln!(f, "  → Hash: {}", self.hash)?;
 
         // System information
-        if let Some(os) = &self.os_type {
-            write!(f, "  → OS: {}", os)?;
-            if let Some(arch) = &self.arch {
-                writeln!(f, " ({})", arch)?;
-            } else {
-                writeln!(f)?;
+        if let Some(os_info) = &self.os_info {
+            writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
+        }
+        if let Some(network) = &self.network
+            && !network.interfaces.is_empty()
+        {
+            writeln!(f, "  → Network Interfaces:")?;
+            for interface in &network.interfaces {
+                let mac = interface.mac.as_deref().unwrap_or("Unknown MAC");
+                writeln!(f, "    → {}: [{}]", interface.name, mac)?;
+                if !interface.ips.is_empty() {
+                    let ips = interface
+                        .ips
+                        .iter()
+                        .map(|h| h.as_hex())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .wrap(40, None);
+                    writeln!(f, "      → IPs: \n{}", ips)?;
+                }
             }
         }
-        if let Some(ips) = &self.ips {
+        if let Some(hardware) = &self.hardware {
             writeln!(
                 f,
-                "  → IPs: {}",
-                ips.iter()
-                    .map(|h| h.as_hex())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "  → CPU: {} ({} cores), {} GB RAM",
+                hardware.cpu_model, hardware.cpu_cores, hardware.total_memory_gb
             )?;
-        }
-        if let Some(cores) = self.cpu_cores {
-            write!(f, "  → CPU: {} cores", cores)?;
-            if let Some(mem) = self.total_memory_gb {
-                writeln!(f, ", {} GB RAM", mem)?;
-            } else {
-                writeln!(f)?;
+            if let Some(modules) = &hardware.memory_modules {
+                for module in modules {
+                    write!(
+                        f,
+                        "  → RAM: {} ({} GB)",
+                        module.label,
+                        module.size / 1024 / 1024 / 1024
+                    )?;
+                    if let Some(speed) = module.speed_mhz {
+                        write!(f, " @ {} MHz", speed)?;
+                    }
+                    writeln!(f)?;
+                }
+            }
+            if let Some(storage) = &hardware.storage {
+                for disk in storage {
+                    writeln!(
+                        f,
+                        "  → Disk: {} ({:.2} GB)",
+                        disk.model,
+                        disk.size as f64 / 1024.0 / 1024.0 / 1024.0
+                    )?;
+                }
             }
         }
 
@@ -215,17 +296,65 @@ impl Node {
         Ok(created)
     }
 
-    pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
-        use sysinfo::System;
+    pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<()> {
+        use sysinfo::{Disks, Networks, System};
 
-        self.os_type = Some(std::env::consts::OS.to_string());
-        self.arch = Some(std::env::consts::ARCH.to_string());
+        self.os_info = Some(OsInfo {
+            os_type: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+        });
 
         let mut sys = System::new_all();
         sys.refresh_all();
 
-        self.cpu_cores = Some(sys.cpus().len());
-        self.total_memory_gb = Some(sys.total_memory() / 1024 / 1024 / 1024);
+        let disks = Disks::new_with_refreshed_list();
+        let mut unique_disks = std::collections::HashSet::new();
+        let storage = disks
+            .iter()
+            .filter(|disk| {
+                unique_disks.insert((
+                    disk.name().to_string_lossy().to_string(),
+                    disk.total_space(),
+                    disk.available_space(),
+                ))
+            })
+            .map(|disk| StorageDevice {
+                model: disk.name().to_string_lossy().to_string(),
+                size: disk.total_space(),
+            })
+            .collect();
+
+        let networks = Networks::new_with_refreshed_list();
+        let mut interfaces = Vec::new();
+
+        for (name, data) in &networks {
+            let mut ips = Vec::new();
+            for ip_net in data.ip_networks() {
+                let ip_addr = ip_net.addr.to_string();
+                let ip_entity = Ip::create(&ip_addr, ip_net.prefix, &self.hash, ctx).await?;
+                ips.push(ip_entity.hash);
+            }
+
+            interfaces.push(NetworkInterface {
+                name: name.clone(),
+                mac: Some(data.mac_address().to_string()),
+                ips,
+            });
+        }
+
+        self.network = Some(NetworkInfo { interfaces });
+
+        self.hardware = Some(HardwareInfo {
+            cpu_model: sys
+                .cpus()
+                .first()
+                .map(|cpu| cpu.brand().to_string())
+                .unwrap_or_else(|| "Unknown CPU".to_string()),
+            cpu_cores: sys.cpus().len(),
+            total_memory_gb: sys.total_memory() / 1024 / 1024 / 1024,
+            memory_modules: None, // Not supported by sysinfo automatically
+            storage: Some(storage),
+        });
 
         let now = chrono::Utc::now().timestamp();
         if self.created_at.is_none() {
@@ -321,6 +450,45 @@ impl Node {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(())
+    }
+
+    async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
+        let Some(network) = &self.network else {
+            return Ok(String::new());
+        };
+
+        let mut result = Vec::new();
+        for interface in &network.interfaces {
+            for h in &interface.ips {
+                let ip = Ip::get(h, ctx).await?;
+                result.push(ip.address);
+            }
+        }
+
+        result.sort_by_key(|s| {
+            let ip: IpAddr = s.parse().unwrap();
+            match ip {
+                IpAddr::V4(_) => 0,
+                IpAddr::V6(_) => 1,
+            }
+        });
+        Ok(result.join(" "))
+    }
+
+    fn last_seen(&self) -> String {
+        self.last_seen
+            .map(|x| {
+                if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
+                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                } else {
+                    x.to_string()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    fn tags(&self) -> String {
+        self.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default()
     }
 }
 

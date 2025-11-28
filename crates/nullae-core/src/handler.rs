@@ -26,33 +26,12 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
         }
     }
 
-    // IP address - create Ip entity and store its hash
-    let interfaces = pnet::datalink::interfaces();
+    // Extract children (IPs) from node.network
     let mut children = Vec::new();
-
-    for iface in interfaces {
-        for ip_network in iface.ips {
-            let ip_addr = ip_network.ip();
-            // Skip loopback addresses
-            if ip_addr.is_loopback() {
-                continue;
-            }
-
-            let ip_str = ip_addr.to_string();
-            // Create Ip entity
-            match Ip::create(&ip_str, &node.hash, &ctx).await {
-                Ok(ip) => {
-                    children.push(ip.hash);
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to create IP entity for {}: {}", ip_str, e);
-                }
-            }
+    if let Some(network) = &node.network {
+        for interface in &network.interfaces {
+            children.extend(interface.ips.clone());
         }
-    }
-
-    if !children.is_empty() {
-        node.ips = Some(children.clone());
     }
 
     let entity = node.save_with_children(children, &ctx).await?;
