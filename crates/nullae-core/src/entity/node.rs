@@ -37,10 +37,17 @@ pub struct StorageDevice {
     pub size: u64,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NetworkInterface {
+    pub name: String,
+    pub mac: Option<String>,
+    pub ips: Vec<HashID>,
+}
+
 /// Network information
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInfo {
-    pub ips: Vec<HashID>,
+    pub interfaces: Vec<NetworkInterface>,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
@@ -146,16 +153,23 @@ impl std::fmt::Display for Node {
             writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
         }
         if let Some(network) = &self.network
-            && !network.ips.is_empty()
+            && !network.interfaces.is_empty()
         {
-            let ips = network
-                .ips
-                .iter()
-                .map(|h| h.as_hex())
-                .collect::<Vec<_>>()
-                .join(" ")
-                .wrap(40, None);
-            writeln!(f, "  → IPs: \n{}", ips)?;
+            writeln!(f, "  → Network Interfaces:")?;
+            for interface in &network.interfaces {
+                let mac = interface.mac.as_deref().unwrap_or("Unknown MAC");
+                writeln!(f, "    → {}: [{}]", interface.name, mac)?;
+                if !interface.ips.is_empty() {
+                    let ips = interface
+                        .ips
+                        .iter()
+                        .map(|h| h.as_hex())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                        .wrap(40, None);
+                    writeln!(f, "      → IPs: \n{}", ips)?;
+                }
+            }
         }
         if let Some(hardware) = &self.hardware {
             writeln!(
@@ -282,8 +296,8 @@ impl Node {
         Ok(created)
     }
 
-    pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
-        use sysinfo::{Disks, System};
+    pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<()> {
+        use sysinfo::{Disks, Networks, System};
 
         self.os_info = Some(OsInfo {
             os_type: std::env::consts::OS.to_string(),
@@ -309,6 +323,26 @@ impl Node {
                 size: disk.total_space(),
             })
             .collect();
+
+        let networks = Networks::new_with_refreshed_list();
+        let mut interfaces = Vec::new();
+
+        for (name, data) in &networks {
+            let mut ips = Vec::new();
+            for ip_net in data.ip_networks() {
+                let ip_addr = ip_net.addr.to_string();
+                let ip_entity = Ip::create(&ip_addr, &self.hash, ctx).await?;
+                ips.push(ip_entity.hash);
+            }
+
+            interfaces.push(NetworkInterface {
+                name: name.clone(),
+                mac: Some(data.mac_address().to_string()),
+                ips,
+            });
+        }
+
+        self.network = Some(NetworkInfo { interfaces });
 
         self.hardware = Some(HardwareInfo {
             cpu_model: sys
@@ -424,9 +458,11 @@ impl Node {
         };
 
         let mut result = Vec::new();
-        for h in &network.ips {
-            let ip = Ip::get(h, ctx).await?;
-            result.push(ip.address);
+        for interface in &network.interfaces {
+            for h in &interface.ips {
+                let ip = Ip::get(h, ctx).await?;
+                result.push(ip.address);
+            }
         }
         Ok(result.join(" "))
     }
