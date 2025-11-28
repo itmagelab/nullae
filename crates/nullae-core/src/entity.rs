@@ -257,7 +257,7 @@ where
     );
     table.modify(
         Segment::all().not(Rows::first()),
-        Format::content(|s| s.wrap(25, Some(7))),
+        Format::content(|s| s.wrap(32, Some(7))),
     );
     println!("{table}");
     println!();

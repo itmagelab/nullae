@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{net::IpAddr, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
@@ -331,7 +331,7 @@ impl Node {
             let mut ips = Vec::new();
             for ip_net in data.ip_networks() {
                 let ip_addr = ip_net.addr.to_string();
-                let ip_entity = Ip::create(&ip_addr, &self.hash, ctx).await?;
+                let ip_entity = Ip::create(&ip_addr, ip_net.prefix, &self.hash, ctx).await?;
                 ips.push(ip_entity.hash);
             }
 
@@ -464,6 +464,14 @@ impl Node {
                 result.push(ip.address);
             }
         }
+
+        result.sort_by_key(|s| {
+            let ip: IpAddr = s.parse().unwrap();
+            match ip {
+                IpAddr::V4(_) => 0,
+                IpAddr::V6(_) => 1,
+            }
+        });
         Ok(result.join(" "))
     }
 
