@@ -1,3 +1,4 @@
+use crate::entity::node::NetworkInfo;
 use crate::prelude::*;
 
 pub async fn discovery() -> Result<(), anyhow::Error> {
@@ -52,7 +53,9 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
     }
 
     if !children.is_empty() {
-        node.ips = Some(children.clone());
+        node.network = Some(NetworkInfo {
+            ips: children.clone(),
+        });
     }
 
     let entity = node.save_with_children(children, &ctx).await?;

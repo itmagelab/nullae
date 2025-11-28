@@ -5,6 +5,26 @@ use tabled::Tabled;
 
 use crate::prelude::*;
 
+/// Operating system information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct OsInfo {
+    pub os_type: String,
+    pub arch: String,
+}
+
+/// Hardware information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HardwareInfo {
+    pub cpu_cores: usize,
+    pub total_memory_gb: u64,
+}
+
+/// Network information
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NetworkInfo {
+    pub ips: Vec<HashID>,
+}
+
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
 pub struct Node {
     pub(crate) hash: HashID,
@@ -12,12 +32,9 @@ pub struct Node {
     pub(crate) hostname: String,
     pub(crate) domain: HashID,
     pub(crate) description: Option<String>,
-    pub(crate) os_type: Option<String>,
-    #[index]
-    pub(crate) arch: Option<String>,
-    pub(crate) ips: Option<Vec<HashID>>,
-    pub(crate) cpu_cores: Option<usize>,
-    pub(crate) total_memory_gb: Option<u64>,
+    pub(crate) os_info: Option<OsInfo>,
+    pub(crate) hardware: Option<HardwareInfo>,
+    pub(crate) network: Option<NetworkInfo>,
     pub(crate) created_at: Option<i64>,
     pub(crate) last_seen: Option<i64>,
     pub(crate) environment: Option<String>,
@@ -48,16 +65,33 @@ impl NodeView {
         let hostname = n.hostname.clone();
         let domain = n.domain.clone();
         let domain = Domain::get(&domain, ctx).await?.name;
+        let ips = n.ips(ctx).await?;
         Ok(NodeView {
             hash: n.hash.to_string(),
             hostname,
             domain,
             description: n.description.clone().unwrap_or_default(),
-            os_type: n.os_type.clone().unwrap_or_default(),
-            arch: n.arch.clone().unwrap_or_default(),
-            ips: n.ips(ctx).await?,
-            cpu_cores: n.cpu_cores.map(|x| x.to_string()).unwrap_or_default(),
-            total_memory_gb: n.total_memory_gb.map(|x| x.to_string()).unwrap_or_default(),
+            os_type: n
+                .os_info
+                .as_ref()
+                .map(|os| os.os_type.clone())
+                .unwrap_or_default(),
+            arch: n
+                .os_info
+                .as_ref()
+                .map(|os| os.arch.clone())
+                .unwrap_or_default(),
+            ips,
+            cpu_cores: n
+                .hardware
+                .as_ref()
+                .map(|hw| hw.cpu_cores.to_string())
+                .unwrap_or_default(),
+            total_memory_gb: n
+                .hardware
+                .as_ref()
+                .map(|hw| hw.total_memory_gb.to_string())
+                .unwrap_or_default(),
             last_seen: n.last_seen(),
             environment: n.environment.clone().unwrap_or_default(),
             tags: n.tags(),
@@ -77,31 +111,29 @@ impl std::fmt::Display for Node {
         writeln!(f, "  → Hash: {}", self.hash)?;
 
         // System information
-        if let Some(os) = &self.os_type {
-            write!(f, "  → OS: {}", os)?;
-            if let Some(arch) = &self.arch {
-                writeln!(f, " ({})", arch)?;
-            } else {
-                writeln!(f)?;
+        if let Some(os_info) = &self.os_info {
+            writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
+        }
+        if let Some(network) = &self.network {
+            if !network.ips.is_empty() {
+                writeln!(
+                    f,
+                    "  → IPs: {}",
+                    network
+                        .ips
+                        .iter()
+                        .map(|h| h.as_hex())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )?;
             }
         }
-        if let Some(ips) = &self.ips {
+        if let Some(hardware) = &self.hardware {
             writeln!(
                 f,
-                "  → IPs: {}",
-                ips.iter()
-                    .map(|h| h.as_hex())
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "  → CPU: {} cores, {} GB RAM",
+                hardware.cpu_cores, hardware.total_memory_gb
             )?;
-        }
-        if let Some(cores) = self.cpu_cores {
-            write!(f, "  → CPU: {} cores", cores)?;
-            if let Some(mem) = self.total_memory_gb {
-                writeln!(f, ", {} GB RAM", mem)?;
-            } else {
-                writeln!(f)?;
-            }
         }
 
         // Operational information
@@ -200,14 +232,18 @@ impl Node {
     pub async fn collect_host_info<S: Storage>(&mut self, _ctx: &Context<S>) -> anyhow::Result<()> {
         use sysinfo::System;
 
-        self.os_type = Some(std::env::consts::OS.to_string());
-        self.arch = Some(std::env::consts::ARCH.to_string());
+        self.os_info = Some(OsInfo {
+            os_type: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+        });
 
         let mut sys = System::new_all();
         sys.refresh_all();
 
-        self.cpu_cores = Some(sys.cpus().len());
-        self.total_memory_gb = Some(sys.total_memory() / 1024 / 1024 / 1024);
+        self.hardware = Some(HardwareInfo {
+            cpu_cores: sys.cpus().len(),
+            total_memory_gb: sys.total_memory() / 1024 / 1024 / 1024,
+        });
 
         let now = chrono::Utc::now().timestamp();
         if self.created_at.is_none() {
@@ -306,12 +342,12 @@ impl Node {
     }
 
     async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
-        let Some(ips) = &self.ips else {
+        let Some(network) = &self.network else {
             return Ok(String::new());
         };
 
         let mut result = Vec::new();
-        for h in ips {
+        for h in &network.ips {
             let ip = Ip::get(h, ctx).await?;
             result.push(ip.address);
         }
