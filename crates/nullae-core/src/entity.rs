@@ -9,11 +9,12 @@ use crate::prelude::*;
 
 use crate::{BASE_PATH, SHORT_HASH};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use tabled::settings::object::Segment;
 use tabled::{
     Tabled,
     settings::{
-        Format, Modify, Style, Width,
-        object::{Columns, Object, Rows, Segment},
+        Format, Style,
+        object::{Columns, Object, Rows},
         style::{HorizontalLine, LineText, VerticalLine},
     },
 };
@@ -47,6 +48,10 @@ impl HashID {
 
     pub fn short_hash(&self) -> String {
         self.as_hex()[..SHORT_HASH].to_string()
+    }
+
+    pub fn short_hash_decorated(&self) -> String {
+        format!("[{}]", self.short_hash())
     }
 
     pub fn from_bytes(bytes: [u8; 32]) -> Self {
@@ -242,7 +247,6 @@ where
             .verticals([(1, VerticalLine::inherit(Style::modern()))])
             .remove_horizontal(),
     );
-    table.with(Modify::new(Segment::all()).with(Width::wrap(40)));
     table.with(LineText::new(title, Rows::first()).offset(1));
     table.modify(
         Columns::one(0).not(Rows::first()),
@@ -250,6 +254,10 @@ where
             let short: String = s.chars().take(SHORT_HASH).collect();
             short
         }),
+    );
+    table.modify(
+        Segment::all().not(Rows::first()),
+        Format::content(|s| s.wrap(25)),
     );
     println!("{table}");
     println!();

@@ -55,30 +55,12 @@ impl NodeView {
             description: n.description.clone().unwrap_or_default(),
             os_type: n.os_type.clone().unwrap_or_default(),
             arch: n.arch.clone().unwrap_or_default(),
-            ips: n
-                .ips
-                .as_ref()
-                .map(|v| {
-                    v.iter()
-                        .map(|h| h.short_hash())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                })
-                .unwrap_or_default(),
+            ips: n.ips(ctx).await?,
             cpu_cores: n.cpu_cores.map(|x| x.to_string()).unwrap_or_default(),
             total_memory_gb: n.total_memory_gb.map(|x| x.to_string()).unwrap_or_default(),
-            last_seen: n
-                .last_seen
-                .map(|x| {
-                    if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
-                        datetime.format("%Y-%m-%d %H:%M:%S").to_string()
-                    } else {
-                        x.to_string()
-                    }
-                })
-                .unwrap_or_default(),
+            last_seen: n.last_seen(),
             environment: n.environment.clone().unwrap_or_default(),
-            tags: n.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default(),
+            tags: n.tags(),
         })
     }
 }
@@ -321,6 +303,35 @@ impl Node {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(())
+    }
+
+    async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
+        let Some(ips) = &self.ips else {
+            return Ok(String::new());
+        };
+
+        let mut result = Vec::new();
+        for h in ips {
+            let ip = Ip::get(h, ctx).await?;
+            result.push(ip.address);
+        }
+        Ok(result.join(" "))
+    }
+
+    fn last_seen(&self) -> String {
+        self.last_seen
+            .map(|x| {
+                if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
+                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                } else {
+                    x.to_string()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    fn tags(&self) -> String {
+        self.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default()
     }
 }
 

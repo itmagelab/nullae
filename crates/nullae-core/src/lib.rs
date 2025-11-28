@@ -12,6 +12,7 @@ pub(crate) const SHORT_HASH: usize = 8;
 
 pub trait Hashable {
     fn hash(&self) -> String;
+    fn wrap(&self, max_width: usize) -> String;
 }
 
 impl Hashable for str {
@@ -21,11 +22,56 @@ impl Hashable for str {
         hasher.update(self.as_bytes());
         hex::encode(hasher.finalize())
     }
+    fn wrap(&self, max_width: usize) -> String {
+        if max_width == 0 {
+            return self.to_string();
+        }
+
+        let mut result = Vec::new();
+        let mut current_line = String::new();
+
+        for word in self.split_whitespace() {
+            let word_len = word.chars().count();
+
+            if current_line.is_empty() {
+                if word_len > max_width {
+                    result.push(word.to_string());
+                } else {
+                    current_line = word.to_string();
+                }
+            } else {
+                let current_len = current_line.chars().count();
+                let new_len = current_len + 1 + word_len;
+
+                if new_len <= max_width {
+                    current_line.push(' ');
+                    current_line.push_str(word);
+                } else {
+                    result.push(current_line);
+                    if word_len > max_width {
+                        result.push(word.to_string());
+                        current_line = String::new();
+                    } else {
+                        current_line = word.to_string();
+                    }
+                }
+            }
+        }
+
+        if !current_line.is_empty() {
+            result.push(current_line);
+        }
+
+        result.join("\n")
+    }
 }
 
 impl Hashable for String {
     fn hash(&self) -> String {
         self.as_str().hash()
+    }
+    fn wrap(&self, max_width: usize) -> String {
+        self.as_str().wrap(max_width)
     }
 }
 
@@ -90,5 +136,53 @@ mod tests {
             .buffer_unordered(5)
             .collect::<()>()
             .await;
+    }
+
+    #[test]
+    fn test_wrap_text_basic() {
+        let text = "This is a very long line that needs to be wrapped";
+        let wrapped = str::wrap(text, 20);
+
+        for line in wrapped.lines() {
+            assert!(line.len() <= 20, "Line '{}' exceeds max width", line);
+        }
+
+        assert!(wrapped.contains('\n'));
+    }
+
+    #[test]
+    fn test_wrap_text_short() {
+        let text = "Short text";
+        let wrapped = str::wrap(text, 50);
+        assert_eq!(wrapped, text);
+    }
+
+    #[test]
+    fn test_wrap_text_exact_width() {
+        let text = "Hello world";
+        let wrapped = str::wrap(text, 11);
+        assert_eq!(wrapped, "Hello world");
+    }
+
+    #[test]
+    fn test_wrap_text_long_word() {
+        let text = "This verylongwordthatexceedswidth fits";
+        let wrapped = str::wrap(text, 10);
+
+        assert!(wrapped.contains("verylongwordthatexceedswidth"));
+    }
+
+    #[test]
+    fn test_wrap_text_empty() {
+        let text = "";
+        let wrapped = str::wrap(text, 10);
+        assert_eq!(wrapped, "");
+    }
+
+    #[test]
+    fn test_wrap_text_zero_width() {
+        let text = "Some text";
+        let wrapped = str::wrap(text, 0);
+        assert_eq!(wrapped, text);
     }
 }
