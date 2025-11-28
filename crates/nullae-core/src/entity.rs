@@ -117,10 +117,10 @@ impl Metadata {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "kind")]
 pub enum EntityKind {
-    Node { inner: Node },
-    Domain { inner: Domain },
-    Ip { inner: Ip },
-    Url { inner: Url },
+    Node { inner: Box<Node> },
+    Domain { inner: Box<Domain> },
+    Ip { inner: Box<Ip> },
+    Url { inner: Box<Url> },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -219,9 +219,9 @@ impl Entity {
                 EntityKind::Node { inner } => {
                     nodes.push(NodeView::try_from_node_async(&inner, ctx).await?)
                 }
-                EntityKind::Domain { inner } => domains.push(DomainView::from(&inner)),
-                EntityKind::Ip { inner } => ips.push(IpView::from(&inner)),
-                EntityKind::Url { inner } => urls.push(UrlView::from(&inner)),
+                EntityKind::Domain { inner } => domains.push(DomainView::from(&*inner)),
+                EntityKind::Ip { inner } => ips.push(IpView::from(&*inner)),
+                EntityKind::Url { inner } => urls.push(UrlView::from(&*inner)),
             }
         }
 

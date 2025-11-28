@@ -76,7 +76,7 @@ pub fn entity(input: TokenStream) -> TokenStream {
             fn from(value: #name) -> Self {
                 let metadata = Metadata::new();
                 let kind = EntityKind::#variant_name {
-                    inner: value,
+                    inner: Box::new(value),
                 };
                 Self {
                     metadata, kind
@@ -89,7 +89,7 @@ pub fn entity(input: TokenStream) -> TokenStream {
 
             fn try_from(entity: Entity) -> Result<Self, Self::Error> {
                 if let EntityKind::#variant_name { inner } = entity.kind {
-                    Ok(inner)
+                    Ok(*inner)
                 } else {
                     anyhow::bail!("Invalid entity type, expected {}", stringify!(#variant_name))
                 }
