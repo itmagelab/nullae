@@ -48,7 +48,7 @@ impl Url {
         let parsed_url = url::Url::parse(url)
             .map_err(|e| anyhow::anyhow!("Invalid URL format '{}': {}", url, e))?;
 
-        let hash = HashID::from_str(&format!("{}|", url).hash())?;
+        let hash = HashID::from_str(&format!("{}|", url).to_hash())?;
         let slug = hash.as_hex()[..SHORT_HASH].to_string();
 
         Ok(Self {
@@ -58,15 +58,15 @@ impl Url {
         })
     }
 
-    pub async fn create<S: Storage>(name: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn create<S: Storage + Sync>(name: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
         let url = Self::new(name)?;
         url.index()?.save(ctx).await?;
         ctx.storage().create(&url.into()).await?.try_into()
     }
 
-    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+    pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         let entity: Entity = self.into();
-        entity.delete(ctx).await?;
+        ctx.storage().delete(&entity).await?;
         Ok(())
     }
 

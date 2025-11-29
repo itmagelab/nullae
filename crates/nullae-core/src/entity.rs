@@ -164,25 +164,11 @@ impl Entity {
         self.metadata.children.is_some()
     }
 
-    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        if self.has_children() {
-            anyhow::bail!("Can't delete entity with children");
-        }
-
-        match self.kind {
-            EntityKind::Node { inner } => inner.delete(ctx).await?,
-            _ => {
-                ctx.storage().delete(&self).await?;
-            }
-        }
-        Ok(())
-    }
-
     pub(crate) fn payload(&self) -> anyhow::Result<serde_json::Value> {
         Ok(serde_json::to_value(self)?)
     }
 
-    pub(crate) fn hash(&self) -> &HashID {
+    pub(crate) fn hashid(&self) -> &HashID {
         match &self.kind {
             EntityKind::Node { inner } => &inner.hash,
             EntityKind::Domain { inner } => &inner.hash,
@@ -192,7 +178,7 @@ impl Entity {
     }
 
     pub(crate) fn path(&self) -> String {
-        format!("{BASE_PATH}/entity/{}", self.hash())
+        format!("{BASE_PATH}/entity/{}", self.hashid())
     }
 
     pub fn type_name(&self) -> &'static str {
@@ -204,7 +190,7 @@ impl Entity {
         }
     }
 
-    pub async fn view<S: Storage>(vec: Vec<Self>, ctx: &Context<S>) -> anyhow::Result<()> {
+    pub async fn view<S: Storage + Sync>(vec: Vec<Self>, ctx: &Context<S>) -> anyhow::Result<()> {
         let mut nodes = Vec::new();
         let mut domains = Vec::new();
         let mut ips = Vec::new();

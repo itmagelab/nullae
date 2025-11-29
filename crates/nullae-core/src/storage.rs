@@ -1,51 +1,93 @@
 pub mod consul;
 
+use crate::BASE_PATH;
 use crate::prelude::*;
 use std::future::Future;
 
-/// Storage trait defining the interface for all storage operations.
-/// Implementations can use different backends (Consul, Redis, PostgreSQL, etc.).
 pub trait Storage {
-    /// Gets an index item by its path
-    fn get_index(&self, path: &str) -> impl Future<Output = anyhow::Result<Option<Item>>> + Send;
+    fn create(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send
+    where
+        Self: Sync,
+    {
+        async move {
+            if let Some(existing) = self.get(entity).await? {
+                return Ok(existing);
+            }
 
-    /// Saves or updates an entity
-    fn save(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
+            self.put(entity).await
+        }
+    }
 
-    /// Puts an index item
-    fn save_index(
+    fn get(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send
+    where
+        Self: Sync,
+    {
+        async move {
+            let hash = &entity.hashid().as_hex();
+            self.get_by_hash(hash).await
+        }
+    }
+
+    fn get_by_hash(&self, hash: &str) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send
+    where
+        Self: Sync,
+    {
+        async move {
+            let url = self.prefix_with(&format!("{BASE_PATH}/entity/{}", hash));
+            Ok(self.get_by_url(&url).await?.pop())
+        }
+    }
+
+    fn find_by_slug(
         &self,
-        path: &str,
+        slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send
+    where
+        Self: Sync,
+    {
+        async move { Ok(self.find_by_index("slug", slug).await?.pop()) }
+    }
+
+    fn find_by_partial_hash(
+        &self,
+        hash: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send
+    where
+        Self: Sync,
+    {
+        async move {
+            let mut entities = self.all().await?;
+            entities.retain(|e| e.hashid().as_hex().contains(hash));
+
+            if entities.len() > 1 {
+                anyhow::bail!("duplicate entity found for hash {}", hash);
+            };
+
+            Ok(entities)
+        }
+    }
+
+    fn put(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
+    fn delete(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<()>> + Send;
+    fn get_index(&self, name: &str) -> impl Future<Output = anyhow::Result<Option<Item>>> + Send;
+    fn save_index_item(
+        &self,
         item: &Item,
-    ) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    /// Creates an entity (returns existing if already exists)
-    fn create(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<Entity>> + Send;
-
-    /// Finds entities by pattern (hash, slug, or index)
-    fn find(&self, pattern: &str) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
-
-    /// Finds entity by hash
-    fn get(&self, hash: &str) -> impl Future<Output = anyhow::Result<Option<Entity>>> + Send;
-
-    /// Finds entities by index
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+    fn delete_from_index(
+        &self,
+        entity: &Entity,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
     fn find_by_index(
         &self,
         index: &str,
         pattern: &str,
     ) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
-
-    /// Lists all entities
-    fn list(&self) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
-
-    /// Deletes an index item
-    fn delete_index(&self, path: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    /// Deletes an entity
-    fn delete(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<()>> + Send;
-
-    fn purge_index(
+    fn all(&self) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
+    fn find(&self, pattern: &str) -> impl Future<Output = anyhow::Result<Vec<Entity>>> + Send;
+    fn prefix_with(&self, path: &str) -> String;
+    fn get_by_url(
         &self,
-        entity: &Entity,
-    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
+        url: &str,
+    ) -> impl std::future::Future<Output = anyhow::Result<Vec<Entity>>> + Send;
 }

@@ -52,7 +52,7 @@ impl Ip {
             anyhow::bail!("Invalid IP address format: {}", address);
         }
 
-        let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).hash())?;
+        let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).to_hash())?;
         Ok(Self {
             hash,
             address,
@@ -60,15 +60,15 @@ impl Ip {
         })
     }
 
-    pub async fn get<S: Storage>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
-        let ips = ctx.storage().get(&hash.as_hex()).await?;
+    pub async fn get<S: Storage + Sync>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
+        let ips = ctx.storage().get_by_hash(&hash.as_hex()).await?;
         let Some(entity) = ips else {
             anyhow::bail!("Can't find IP for hash: {}", hash);
         };
         entity.try_into()
     }
 
-    pub async fn create<S: Storage>(
+    pub async fn create<S: Storage + Sync>(
         address: &str,
         prefix: u8,
         parent_hash: &HashID,
@@ -81,14 +81,14 @@ impl Ip {
         ip.save(ctx).await
     }
 
-    pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn save<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<Self> {
         self.index()?.save(ctx).await?;
         ctx.storage().create(&self.into()).await?.try_into()
     }
 
-    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+    pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         let entity: Entity = self.into();
-        entity.delete(ctx).await?;
+        ctx.storage().delete(&entity).await?;
         Ok(())
     }
 }

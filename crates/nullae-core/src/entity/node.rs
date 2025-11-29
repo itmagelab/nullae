@@ -84,7 +84,7 @@ pub struct NodeView {
 }
 
 impl NodeView {
-    pub(crate) async fn try_from_node_async<S: Storage>(
+    pub(crate) async fn try_from_node_async<S: Storage + Sync>(
         n: &Node,
         ctx: &Context<S>,
     ) -> anyhow::Result<Self> {
@@ -236,7 +236,7 @@ impl Node {
             );
         }
 
-        let hash = HashID::from_str(&format!("{}|{}", &hostname, &domain).hash())?;
+        let hash = HashID::from_str(&format!("{}|{}", &hostname, &domain).to_hash())?;
         Ok(Self {
             hostname,
             domain,
@@ -245,7 +245,7 @@ impl Node {
         })
     }
 
-    pub async fn from_current_host<S: Storage>(ctx: &Context<S>) -> anyhow::Result<Self> {
+    pub async fn from_current_host<S: Storage + Sync>(ctx: &Context<S>) -> anyhow::Result<Self> {
         let (hostname, domain) = get_host_info();
         let domain = Domain::new(domain)?;
 
@@ -253,13 +253,13 @@ impl Node {
         Self::create(&hostname, &domain, ctx).await
     }
 
-    pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
+    pub async fn save<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
         let entity: Entity = self.into();
 
-        ctx.storage().save(&entity).await
+        ctx.storage().put(&entity).await
     }
 
-    pub async fn save_with_children<S: Storage>(
+    pub async fn save_with_children<S: Storage + Sync>(
         self,
         children: Vec<HashID>,
         ctx: &Context<S>,
@@ -270,16 +270,16 @@ impl Node {
             entity.add_child(&hash.as_hex())?;
         }
 
-        ctx.storage().save(&entity).await
+        ctx.storage().put(&entity).await
     }
 
-    pub async fn create<S: Storage>(
+    pub async fn create<S: Storage + Sync>(
         name: &str,
         domain: &Domain,
         ctx: &Context<S>,
     ) -> anyhow::Result<Self> {
         let node = Self::new(name, &domain.hash)?;
-        let mut domain_entity = match ctx.storage().get(&domain.hash.as_hex()).await? {
+        let mut domain_entity = match ctx.storage().get_by_hash(&domain.hash.as_hex()).await? {
             Some(d) => d,
             None => {
                 let domain = Domain::get(&domain.hash, ctx).await?;
@@ -287,7 +287,7 @@ impl Node {
             }
         };
         domain_entity.add_child(&node.hash.as_hex())?;
-        ctx.storage().save(&domain_entity).await?;
+        ctx.storage().put(&domain_entity).await?;
 
         let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
 
@@ -296,7 +296,10 @@ impl Node {
         Ok(created)
     }
 
-    pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<()> {
+    pub async fn collect_host_info<S: Storage + Sync>(
+        &mut self,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<()> {
         use sysinfo::{Disks, Networks, System};
 
         self.os_info = Some(OsInfo {
@@ -379,8 +382,9 @@ impl Node {
         self
     }
 
-    pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let Some(mut domain_entity) = ctx.storage().get(&self.domain.as_hex()).await? else {
+    pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+        let Some(mut domain_entity) = ctx.storage().get_by_hash(&self.domain.as_hex()).await?
+        else {
             anyhow::bail!(
                 "Can't find domain for Node: hash = {}, hostname = {}, domain = {}",
                 self.hash,
@@ -389,15 +393,14 @@ impl Node {
             );
         };
         domain_entity.remove_child(&self.hash.as_hex());
-        ctx.storage().save(&domain_entity).await?;
+        ctx.storage().put(&domain_entity).await?;
 
-        let node_entity: Entity = self.into();
-        ctx.storage().delete(&node_entity).await?;
+        ctx.storage().delete(&self.into()).await?;
 
         Ok(())
     }
 
-    pub async fn delete_batch<S: Storage>(
+    pub async fn delete_batch<S: Storage + Sync>(
         nodes: Vec<Self>,
         ctx: &Context<S>,
         batch_size: usize,
@@ -415,7 +418,7 @@ impl Node {
 
         stream::iter(nodes_by_domain)
             .map(|(domain_hash, domain_nodes)| async move {
-                let Some(mut domain_entity) = ctx.storage().get(&domain_hash).await? else {
+                let Some(mut domain_entity) = ctx.storage().get_by_hash(&domain_hash).await? else {
                     anyhow::bail!("Can't find domain with hash: {}", domain_hash);
                 };
 
@@ -423,7 +426,7 @@ impl Node {
                     domain_entity.remove_child(&node.hash.as_hex());
                 }
 
-                ctx.storage().save(&domain_entity).await?;
+                ctx.storage().put(&domain_entity).await?;
 
                 stream::iter(domain_nodes)
                     .map(|node| async move {
@@ -448,7 +451,7 @@ impl Node {
         Ok(())
     }
 
-    async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
+    async fn ips<S: Storage + Sync>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
         let Some(network) = &self.network else {
             return Ok(String::new());
         };

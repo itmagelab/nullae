@@ -3,11 +3,11 @@ use crate::storage::consul::Consul;
 
 /// Application context that holds shared resources and configuration.
 /// This should be passed through all application layers according to conventions.md.
-pub struct Context<S: Storage> {
+pub struct Context<S: Storage + Sync> {
     storage: S,
 }
 
-impl<S: Storage> Context<S> {
+impl<S: Storage + Sync> Context<S> {
     /// Creates a new Context with the provided storage.
     pub fn with_storage(storage: S) -> Self {
         Self { storage }

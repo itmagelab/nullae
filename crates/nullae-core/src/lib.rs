@@ -10,13 +10,13 @@ use crate::index::Index;
 pub(crate) const BASE_PATH: &str = "0ae";
 pub(crate) const SHORT_HASH: usize = 8;
 
-pub trait Hashable {
-    fn hash(&self) -> String;
+pub trait StrExt {
+    fn to_hash(&self) -> String;
     fn wrap(&self, max_width: usize, max_lines: Option<usize>) -> String;
 }
 
-impl Hashable for str {
-    fn hash(&self) -> String {
+impl StrExt for str {
+    fn to_hash(&self) -> String {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(self.as_bytes());
@@ -74,9 +74,9 @@ impl Hashable for str {
     }
 }
 
-impl Hashable for String {
-    fn hash(&self) -> String {
-        self.as_str().hash()
+impl StrExt for String {
+    fn to_hash(&self) -> String {
+        self.as_str().to_hash()
     }
     fn wrap(&self, max_width: usize, max_lines: Option<usize>) -> String {
         self.as_str().wrap(max_width, max_lines)
@@ -99,7 +99,7 @@ mod tests {
         let mut node = Node::create("local-1", &domain, &ctx).await.unwrap();
         node.collect_host_info(&ctx).await.unwrap();
         let node = node.save(&ctx).await.unwrap();
-        node.delete(&ctx).await.unwrap();
+        ctx.storage().delete(&node).await.unwrap();
         domain.delete(&ctx).await.unwrap();
     }
 

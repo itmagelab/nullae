@@ -48,7 +48,7 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
 
 pub async fn list() -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let entities = ctx.storage().list().await?;
+    let entities = ctx.storage().all().await?;
 
     Entity::view(entities, &ctx).await?;
 
@@ -59,14 +59,14 @@ pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
     let mut entities = ctx.storage().find(&pattern).await?;
     let same = if let Some(first) = entities.first() {
-        entities.iter().all(|e| e.hash() == first.hash())
+        entities.iter().all(|e| e.hashid() == first.hashid())
     } else {
         true
     };
     if let Some(entity) = entities.pop()
         && same
     {
-        entity.delete(&ctx).await?;
+        ctx.storage().delete(&entity).await?;
     };
 
     Ok(())
