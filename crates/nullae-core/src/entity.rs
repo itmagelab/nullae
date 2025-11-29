@@ -169,14 +169,10 @@ impl Entity {
             anyhow::bail!("Can't delete entity with children");
         }
 
-        let index = Index::from_entity(&self)?;
-
         match self.kind {
             EntityKind::Node { inner } => inner.delete(ctx).await?,
             _ => {
                 ctx.storage().delete(&self).await?;
-
-                index.purge(ctx).await?;
             }
         }
         Ok(())

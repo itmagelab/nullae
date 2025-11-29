@@ -43,4 +43,9 @@ pub trait Storage {
 
     /// Deletes an entity
     fn delete(&self, entity: &Entity) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    fn purge_index(
+        &self,
+        entity: &Entity,
+    ) -> impl std::future::Future<Output = anyhow::Result<()>> + Send;
 }

@@ -392,9 +392,7 @@ impl Node {
         ctx.storage().save(&domain_entity).await?;
 
         let node_entity: Entity = self.into();
-        let index = Index::from_entity(&node_entity)?;
         ctx.storage().delete(&node_entity).await?;
-        index.purge(ctx).await?;
 
         Ok(())
     }
@@ -430,9 +428,7 @@ impl Node {
                 stream::iter(domain_nodes)
                     .map(|node| async move {
                         let node_entity: Entity = node.into();
-                        let index = Index::from_entity(&node_entity)?;
                         ctx.storage().delete(&node_entity).await?;
-                        index.purge(ctx).await?;
                         Ok::<(), anyhow::Error>(())
                     })
                     .buffer_unordered(batch_size)
