@@ -105,6 +105,36 @@ impl Consul {
 }
 
 impl Storage for Consul {
+    async fn save(&self, entity: &Entity) -> anyhow::Result<Entity> {
+        let payload = entity.payload()?;
+        let url = self.build_url(&entity.path());
+
+        self.pool.put(&url).json(&payload).send().await?;
+
+        let entity = self
+            .get_by_url(&url)
+            .await?
+            .pop()
+            .ok_or_else(|| anyhow::anyhow!("failed to get created entity"))?;
+
+        Ok(entity)
+    }
+
+    async fn create(&self, entity: &Entity) -> anyhow::Result<Entity> {
+        if let Some(existing) = self.get_entity(entity).await? {
+            return Ok(existing);
+        }
+
+        self.save(entity).await
+    }
+
+    async fn delete(&self, entity: &Entity) -> anyhow::Result<()> {
+        let url = self.build_url(&entity.path());
+        self.pool.delete(&url).send().await?;
+        self.purge_index(entity).await?;
+        Ok(())
+    }
+
     async fn get_index(&self, path: &str) -> anyhow::Result<Option<Item>> {
         let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
         let rs = self.pool.get(&url).send().await?;
@@ -122,21 +152,6 @@ impl Storage for Consul {
         }
     }
 
-    async fn save(&self, entity: &Entity) -> anyhow::Result<Entity> {
-        let payload = entity.payload()?;
-        let url = self.build_url(&entity.path());
-
-        self.pool.put(&url).json(&payload).send().await?;
-
-        let entity = self
-            .get_by_url(&url)
-            .await?
-            .pop()
-            .ok_or_else(|| anyhow::anyhow!("failed to get created entity"))?;
-
-        Ok(entity)
-    }
-
     async fn save_index(&self, path: &str, item: &Item) -> anyhow::Result<()> {
         let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
         let payload = item.payload()?;
@@ -144,27 +159,28 @@ impl Storage for Consul {
         Ok(())
     }
 
-    async fn create(&self, entity: &Entity) -> anyhow::Result<Entity> {
-        if let Some(existing) = self.get_entity(entity).await? {
-            return Ok(existing);
+    async fn purge_index(&self, entity: &Entity) -> anyhow::Result<()> {
+        let index = Index::from_entity(entity)?;
+        for new_item in index.value() {
+            let Some(mut saved) = self.get_index(&new_item.path()).await? else {
+                continue;
+            };
+
+            saved.subtract(new_item);
+
+            if saved.is_empty() {
+                self.delete_index(&saved.path()).await?;
+            } else {
+                self.save_index(&saved.path(), &saved).await?;
+            }
         }
-
-        self.save(entity).await
+        Ok(())
     }
 
-    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
-        let mut entities = Vec::new();
-        entities.extend(self.get(pattern).await?);
-        entities.extend(self.find_by_slug(pattern).await?);
-        entities.extend(self.find_by_index("hostname", pattern).await?);
-        entities.extend(self.find_by_index("name", pattern).await?);
-        entities.extend(self.find_by_partial_hash(pattern).await?);
-        Ok(entities)
-    }
-
-    async fn get(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
-        let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
-        Ok(self.get_by_url(&url).await?.pop())
+    async fn delete_index(&self, path: &str) -> anyhow::Result<()> {
+        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        self.pool.delete(&url).send().await?;
+        Ok(())
     }
 
     async fn find_by_index(&self, index: &str, pattern: &str) -> anyhow::Result<Vec<Entity>> {
@@ -229,15 +245,18 @@ impl Storage for Consul {
             .collect()
     }
 
-    async fn delete_index(&self, path: &str) -> anyhow::Result<()> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
-        self.pool.delete(&url).send().await?;
-        Ok(())
+    async fn find(&self, pattern: &str) -> anyhow::Result<Vec<Entity>> {
+        let mut entities = Vec::new();
+        entities.extend(self.get(pattern).await?);
+        entities.extend(self.find_by_slug(pattern).await?);
+        entities.extend(self.find_by_index("hostname", pattern).await?);
+        entities.extend(self.find_by_index("name", pattern).await?);
+        entities.extend(self.find_by_partial_hash(pattern).await?);
+        Ok(entities)
     }
 
-    async fn delete(&self, entity: &Entity) -> anyhow::Result<()> {
-        let url = self.build_url(&entity.path());
-        self.pool.delete(&url).send().await?;
-        Ok(())
+    async fn get(&self, hash: &str) -> anyhow::Result<Option<Entity>> {
+        let url = self.build_url(&format!("{BASE_PATH}/entity/{}", hash));
+        Ok(self.get_by_url(&url).await?.pop())
     }
 }

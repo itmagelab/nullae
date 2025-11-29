@@ -33,11 +33,11 @@ impl Item {
         })
     }
 
-    fn path(&self) -> String {
+    pub(crate) fn path(&self) -> String {
         format!("{BASE_PATH}/index/{}/{}", self.kind, self.data.key)
     }
 
-    fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.data.value.is_empty()
     }
 
@@ -55,7 +55,7 @@ impl Item {
         self.values_mut().dedup();
     }
 
-    fn subtract(&mut self, item: Item) {
+    pub(crate) fn subtract(&mut self, item: Item) {
         let set: HashSet<HashID> = item.into_values().into_iter().collect();
         self.values_mut().retain(|x| !set.contains(x));
     }
@@ -87,6 +87,10 @@ impl Index {
         }
     }
 
+    pub fn value(self) -> Vec<Item> {
+        self.0
+    }
+
     pub(crate) async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         for mut new_item in self.0 {
             if let Some(saved_item) = ctx.storage().get_index(&new_item.path()).await? {
@@ -101,21 +105,21 @@ impl Index {
         Ok(())
     }
 
-    pub(crate) async fn purge<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        for new_item in self.0 {
-            let Some(mut saved) = ctx.storage().get_index(&new_item.path()).await? else {
-                continue;
-            };
-
-            saved.subtract(new_item);
-
-            if saved.is_empty() {
-                ctx.storage().delete_index(&saved.path()).await?;
-            } else {
-                ctx.storage().save_index(&saved.path(), &saved).await?;
-            }
-        }
-
-        Ok(())
-    }
+    // pub(crate) async fn purge<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+    //     for new_item in self.0 {
+    //         let Some(mut saved) = ctx.storage().get_index(&new_item.path()).await? else {
+    //             continue;
+    //         };
+    //
+    //         saved.subtract(new_item);
+    //
+    //         if saved.is_empty() {
+    //             ctx.storage().delete_index(&saved.path()).await?;
+    //         } else {
+    //             ctx.storage().save_index(&saved.path(), &saved).await?;
+    //         }
+    //     }
+    //
+    //     Ok(())
+    // }
 }
