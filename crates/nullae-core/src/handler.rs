@@ -30,7 +30,6 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
     let mut children = Vec::new();
     if let Some(network) = &node.network {
         for interface in &network.interfaces {
-            let interface = Interface::get(interface, &ctx).await?;
             children.extend(interface.ips.clone());
         }
     }

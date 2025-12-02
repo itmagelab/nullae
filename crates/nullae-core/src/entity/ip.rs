@@ -1,17 +1,16 @@
-use std::str::FromStr;
+use std::{net::Ipv4Addr, str::FromStr};
 
 use crate::prelude::*;
 use nullae_macros::{Entity, Indexable};
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
-#[derive(Default, Serialize, Deserialize, Debug, Clone, Indexable, Entity)]
+#[derive(Serialize, Deserialize, Debug, Clone, Indexable, Entity)]
 pub struct Ip {
     pub(crate) hash: HashID,
     pub(crate) parent_hash: HashID,
-    #[index]
-    pub(crate) address: String,
-    pub prefix: u8,
+    pub(crate) address: Ipv4Addr,
+    pub mask: u8,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]
@@ -22,7 +21,7 @@ pub struct IpView {
 
 impl From<&Ip> for IpView {
     fn from(ip: &Ip) -> Self {
-        let address = format!("{}/{}", ip.address, ip.prefix);
+        let address = format!("{}/{}", ip.address, ip.mask);
         IpView {
             hash: ip.hash.to_string(),
             address,
@@ -38,27 +37,13 @@ impl std::fmt::Display for Ip {
 }
 
 impl Ip {
-    pub fn new<S>(address: S, prefix: u8, parent_hash: &HashID) -> anyhow::Result<Self>
-    where
-        S: Into<String>,
-    {
-        let address = address.into();
-
-        if address.trim().is_empty() {
-            anyhow::bail!("IP address cannot be empty or whitespace-only");
-        }
-
-        // Basic validation - check if it's a valid IP address
-        if address.parse::<std::net::IpAddr>().is_err() {
-            anyhow::bail!("Invalid IP address format: {}", address);
-        }
-
+    pub fn new(address: Ipv4Addr, mask: u8, parent_hash: &HashID) -> anyhow::Result<Self> {
         let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).to_hash())?;
         Ok(Self {
             hash,
             parent_hash: parent_hash.clone(),
             address,
-            prefix,
+            mask,
         })
     }
 
@@ -71,7 +56,7 @@ impl Ip {
     }
 
     pub async fn create<S: Storage + Sync>(
-        address: &str,
+        address: Ipv4Addr,
         prefix: u8,
         parent_hash: &HashID,
         ctx: &Context<S>,
@@ -89,22 +74,6 @@ impl Ip {
     }
 
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let parent = ctx
-            .storage()
-            .get_by_hash(&self.parent_hash.as_hex())
-            .await?
-            .ok_or(anyhow::anyhow!("Can't find parent Interface"))?;
-        let interface: Interface = parent.try_into()?;
-
-        let parent = ctx
-            .storage()
-            .get_by_hash(&interface.parent_hash.as_hex())
-            .await?
-            .ok_or(anyhow::anyhow!("Can't find parent Node"))?;
-        let node: Node = parent.try_into()?;
-
-        node.delete_ip(&self.hash, ctx).await?;
-
         let entity: Entity = self.into();
         ctx.storage().delete(&entity).await?;
         Ok(())

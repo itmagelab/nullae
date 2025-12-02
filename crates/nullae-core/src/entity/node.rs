@@ -3,7 +3,6 @@ use std::{net::IpAddr, str::FromStr};
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
-use super::interface::Interface;
 use crate::prelude::*;
 
 /// Operating system information
@@ -38,10 +37,33 @@ pub struct StorageDevice {
     pub size: u64,
 }
 
+#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+pub struct Interface {
+    pub name: String,
+    pub ips: Vec<HashID>,
+}
+
+impl Interface {
+    pub fn new<S>(name: S) -> anyhow::Result<Self>
+    where
+        S: Into<String>,
+    {
+        let name = name.into();
+        Ok(Self {
+            name,
+            ..Default::default()
+        })
+    }
+
+    pub fn add_ips(&mut self, ips: Vec<HashID>) {
+        self.ips.extend(ips);
+    }
+}
+
 /// Network information
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInfo {
-    pub interfaces: Vec<HashID>,
+    pub interfaces: Vec<Interface>,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
@@ -255,21 +277,18 @@ impl Node {
         let mut interfaces = Vec::new();
 
         for (name, data) in &networks {
-            if name != "lo0" {
-                continue;
-            };
             let mut ips = Vec::new();
-            let mut interface = Interface::new(name, &self.hash)?;
+            let mut interface = Interface::new(name)?;
 
             for ip_net in data.ip_networks() {
-                let ip_addr = ip_net.addr.to_string();
-                let ip = Ip::create(&ip_addr, ip_net.prefix, &interface.hash, ctx).await?;
-                ips.push(ip.hash);
+                if let IpAddr::V4(v4) = ip_net.addr {
+                    let ip = Ip::create(v4, ip_net.prefix, &self.hash, ctx).await?;
+                    ips.push(ip.hash);
+                };
             }
 
             interface.add_ips(ips);
-            let interface = interface.save(ctx).await?;
-            interfaces.push(interface.hash);
+            interfaces.push(interface);
         }
 
         self.network = Some(NetworkInfo { interfaces });
@@ -316,9 +335,7 @@ impl Node {
     ) -> anyhow::Result<()> {
         if let Some(network) = &mut self.network {
             for interface in &mut network.interfaces {
-                let mut interface = Interface::get(interface, ctx).await?;
                 interface.ips.retain(|ip_hash| ip_hash != hash);
-                interface.save(ctx).await?;
             }
         };
         ctx.storage().put(&self.into()).await?;
@@ -328,12 +345,10 @@ impl Node {
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
         if let Some(network) = &self.network {
             for interface in &network.interfaces {
-                let interface = Interface::get(interface, ctx).await?;
                 for ip_hash in &interface.ips {
                     let ip = Ip::get(ip_hash, ctx).await?;
                     ip.delete(ctx).await?;
                 }
-                interface.delete(ctx).await?;
             }
         }
 
@@ -381,14 +396,15 @@ impl Node {
                             .map(|net| net.interfaces.iter())
                             .into_iter()
                             .flatten()
+                            .flat_map(|iface| iface.ips.iter())
                             .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>();
 
                 stream::iter(if_deletions)
                     .map(|ip_hash| async move {
-                        let iface = Interface::get(ip_hash, ctx).await?;
-                        iface.delete(ctx).await?;
+                        let ip = Ip::get(ip_hash, ctx).await?;
+                        ip.delete(ctx).await?;
                         Ok::<(), anyhow::Error>(())
                     })
                     .buffer_unordered(batch_size)
@@ -439,20 +455,12 @@ impl Node {
 
         let mut result = Vec::new();
         for interface in &network.interfaces {
-            let interface = Interface::get(interface, ctx).await?;
             for h in &interface.ips {
                 let ip = Ip::get(h, ctx).await?;
-                result.push(ip.address);
+                result.push(ip.address.to_string());
             }
         }
 
-        result.sort_by_key(|s| {
-            let ip: IpAddr = s.parse().unwrap();
-            match ip {
-                IpAddr::V4(_) => 0,
-                IpAddr::V6(_) => 1,
-            }
-        });
         Ok(result.join(" "))
     }
 

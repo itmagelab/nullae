@@ -1,12 +1,11 @@
 pub mod domain;
-pub mod interface;
 pub mod ip;
 pub mod node;
+pub mod pool;
 pub mod url;
 
 use std::str::FromStr;
 
-use crate::entity::interface::Interface;
 use crate::prelude::*;
 
 use crate::{BASE_PATH, SHORT_HASH};
@@ -122,8 +121,8 @@ pub enum EntityKind {
     Node { inner: Box<Node> },
     Domain { inner: Box<Domain> },
     Ip { inner: Box<Ip> },
-    Interface { inner: Box<Interface> },
     Url { inner: Box<Url> },
+    Pool { inner: Box<Pool> },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -140,8 +139,8 @@ impl std::fmt::Display for Entity {
             EntityKind::Node { inner } => write!(f, "{}", inner),
             EntityKind::Domain { inner } => write!(f, "{}", inner),
             EntityKind::Ip { inner } => write!(f, "{}", inner),
-            EntityKind::Interface { inner } => write!(f, "{}", inner),
             EntityKind::Url { inner } => write!(f, "{}", inner),
+            EntityKind::Pool { inner } => write!(f, "{}", inner),
         }
     }
 }
@@ -177,8 +176,8 @@ impl Entity {
             EntityKind::Node { inner } => &inner.hash,
             EntityKind::Domain { inner } => &inner.hash,
             EntityKind::Ip { inner } => &inner.hash,
-            EntityKind::Interface { inner } => &inner.hash,
             EntityKind::Url { inner } => &inner.hash,
+            EntityKind::Pool { inner } => &inner.hash,
         }
     }
 
@@ -191,8 +190,8 @@ impl Entity {
             EntityKind::Node { .. } => "Node",
             EntityKind::Domain { .. } => "Domain",
             EntityKind::Ip { .. } => "Ip",
-            EntityKind::Interface { .. } => "Interface",
             EntityKind::Url { .. } => "Url",
+            EntityKind::Pool { .. } => "Pool",
         }
     }
 
@@ -210,7 +209,7 @@ impl Entity {
                 EntityKind::Domain { inner } => domains.push(DomainView::from(&*inner)),
                 EntityKind::Ip { inner } => ips.push(IpView::from(&*inner)),
                 EntityKind::Url { inner } => urls.push(UrlView::from(&*inner)),
-                EntityKind::Interface { inner: _ } => continue,
+                _ => todo!(),
             }
         }
 

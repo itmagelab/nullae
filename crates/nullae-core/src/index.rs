@@ -84,7 +84,7 @@ impl Index {
             EntityKind::Domain { inner } => inner.index(),
             EntityKind::Ip { inner } => inner.index(),
             EntityKind::Url { inner } => inner.index(),
-            EntityKind::Interface { inner: _ } => Ok(Index::new()),
+            EntityKind::Pool { inner } => inner.index(),
         }
     }
 
