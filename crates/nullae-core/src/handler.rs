@@ -80,8 +80,15 @@ pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
 
 pub async fn show(pattern: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let entities = ctx.storage().find(&pattern).await?;
-    for entity in entities {
+    let mut entities = ctx.storage().find(&pattern).await?;
+    let same = if let Some(first) = entities.first() {
+        entities.iter().all(|e| e.hashid() == first.hashid())
+    } else {
+        true
+    };
+    if let Some(entity) = entities.pop()
+        && same
+    {
         println!("{}", entity)
     }
 

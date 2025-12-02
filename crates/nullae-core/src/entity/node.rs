@@ -133,80 +133,11 @@ impl NodeView {
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let desc = match &self.description {
-            Some(d) => d.as_str(),
-            None => &self.hostname,
-        };
-        writeln!(f, "Node ➤ {}", desc)?;
-        writeln!(f, "  → Hostname: {}", self.hostname)?;
-        writeln!(f, "  → Domain: {}", self.domain)?;
-        writeln!(f, "  → Hash: {}", self.hash)?;
-
-        // System information
-        if let Some(os_info) = &self.os_info {
-            writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
-        }
-        if let Some(network) = &self.network
-            && !network.interfaces.is_empty()
-        {
-            writeln!(f, "  → Network Interfaces:")?;
-            for interface in &network.interfaces {
-                writeln!(f, "    → {}", interface.name)?;
-                if !interface.ips.is_empty() {
-                    let ips = interface
-                        .ips
-                        .iter()
-                        .map(|h| h.as_hex())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                        .wrap(40, None);
-                    writeln!(f, "      → IPs: \n{}", ips)?;
-                }
-            }
-        }
-        if let Some(hardware) = &self.hardware {
-            writeln!(
-                f,
-                "  → CPU: {} ({} cores), {} GB RAM",
-                hardware.cpu_model, hardware.cpu_cores, hardware.total_memory_gb
-            )?;
-            if let Some(modules) = &hardware.memory_modules {
-                for module in modules {
-                    write!(
-                        f,
-                        "  → RAM: {} ({} GB)",
-                        module.label,
-                        module.size / 1024 / 1024 / 1024
-                    )?;
-                    if let Some(speed) = module.speed_mhz {
-                        write!(f, " @ {} MHz", speed)?;
-                    }
-                    writeln!(f)?;
-                }
-            }
-            if let Some(storage) = &hardware.storage {
-                for disk in storage {
-                    writeln!(
-                        f,
-                        "  → Disk: {} ({:.2} GB)",
-                        disk.model,
-                        disk.size as f64 / 1024.0 / 1024.0 / 1024.0
-                    )?;
-                }
-            }
-        }
-
-        // Operational information
-        if let Some(env) = &self.environment {
-            writeln!(f, "  → Environment: {}", env)?;
-        }
-        if let Some(tags) = &self.tags
-            && !tags.is_empty()
-        {
-            writeln!(f, "  → Tags: {}", tags.join(", "))?;
-        }
-
-        Ok(())
+        write!(
+            f,
+            "{}",
+            serde_json::to_string_pretty(self).map_err(|_| std::fmt::Error)?
+        )
     }
 }
 
