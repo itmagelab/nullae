@@ -8,6 +8,7 @@ use tabled::Tabled;
 #[derive(Default, Serialize, Deserialize, Debug, Clone, Indexable, Entity)]
 pub struct Ip {
     pub(crate) hash: HashID,
+    pub(crate) parent_hash: HashID,
     #[index]
     pub(crate) address: String,
     pub prefix: u8,
@@ -55,6 +56,7 @@ impl Ip {
         let hash = HashID::from_str(&format!("{}|{}", &address, parent_hash).to_hash())?;
         Ok(Self {
             hash,
+            parent_hash: parent_hash.clone(),
             address,
             prefix,
         })
@@ -87,6 +89,22 @@ impl Ip {
     }
 
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+        let parent = ctx
+            .storage()
+            .get_by_hash(&self.parent_hash.as_hex())
+            .await?
+            .ok_or(anyhow::anyhow!("Can't find parent Interface"))?;
+        let interface: Interface = parent.try_into()?;
+
+        let parent = ctx
+            .storage()
+            .get_by_hash(&interface.parent_hash.as_hex())
+            .await?
+            .ok_or(anyhow::anyhow!("Can't find parent Node"))?;
+        let node: Node = parent.try_into()?;
+
+        node.delete_ip(&self.hash, ctx).await?;
+
         let entity: Entity = self.into();
         ctx.storage().delete(&entity).await?;
         Ok(())

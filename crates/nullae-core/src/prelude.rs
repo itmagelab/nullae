@@ -1,5 +1,6 @@
 pub use crate::context::Context;
 pub use crate::entity::domain::{Domain, DomainView};
+pub use crate::entity::interface::Interface;
 pub use crate::entity::ip::{Ip, IpView};
 pub use crate::entity::node::{Node, NodeView};
 pub use crate::entity::url::{Url, UrlView};

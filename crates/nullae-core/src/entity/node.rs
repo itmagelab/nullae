@@ -41,7 +41,7 @@ pub struct StorageDevice {
 /// Network information
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInfo {
-    pub interfaces: Vec<Interface>,
+    pub interfaces: Vec<HashID>,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
@@ -255,6 +255,9 @@ impl Node {
         let mut interfaces = Vec::new();
 
         for (name, data) in &networks {
+            if name != "lo0" {
+                continue;
+            };
             let mut ips = Vec::new();
             let mut interface = Interface::new(name, &self.hash)?;
 
@@ -265,7 +268,8 @@ impl Node {
             }
 
             interface.add_ips(ips);
-            interfaces.push(interface);
+            let interface = interface.save(ctx).await?;
+            interfaces.push(interface.hash);
         }
 
         self.network = Some(NetworkInfo { interfaces });
@@ -278,7 +282,7 @@ impl Node {
                 .unwrap_or_else(|| "Unknown CPU".to_string()),
             cpu_cores: sys.cpus().len(),
             total_memory_gb: sys.total_memory() / 1024 / 1024 / 1024,
-            memory_modules: None, // Not supported by sysinfo automatically
+            memory_modules: None,
             storage: Some(storage),
         });
 
@@ -305,18 +309,34 @@ impl Node {
         self
     }
 
+    pub async fn delete_ip<S: Storage + Sync>(
+        mut self,
+        hash: &HashID,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<()> {
+        if let Some(network) = &mut self.network {
+            for interface in &mut network.interfaces {
+                let mut interface = Interface::get(interface, ctx).await?;
+                interface.ips.retain(|ip_hash| ip_hash != hash);
+                interface.save(ctx).await?;
+            }
+        };
+        ctx.storage().put(&self.into()).await?;
+        Ok(())
+    }
+
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        // 1. Delete all dependent IP addresses from network interfaces
         if let Some(network) = &self.network {
             for interface in &network.interfaces {
+                let interface = Interface::get(interface, ctx).await?;
                 for ip_hash in &interface.ips {
                     let ip = Ip::get(ip_hash, ctx).await?;
                     ip.delete(ctx).await?;
                 }
+                interface.delete(ctx).await?;
             }
         }
 
-        // 2. Remove Node from parent Domain
         let Some(mut domain_entity) = ctx.storage().get_by_hash(&self.domain.as_hex()).await?
         else {
             anyhow::bail!(
@@ -329,7 +349,6 @@ impl Node {
         domain_entity.remove_child(&self.hash.as_hex());
         ctx.storage().put(&domain_entity).await?;
 
-        // 3. Delete the Node itself
         ctx.storage().delete(&self.into()).await?;
 
         Ok(())
@@ -354,7 +373,7 @@ impl Node {
         stream::iter(nodes_by_domain)
             .map(|(domain_hash, domain_nodes)| async move {
                 // 1. Delete all dependent IP addresses for all nodes in parallel
-                let ip_deletions = domain_nodes
+                let if_deletions = domain_nodes
                     .iter()
                     .flat_map(|node| {
                         node.network
@@ -362,15 +381,14 @@ impl Node {
                             .map(|net| net.interfaces.iter())
                             .into_iter()
                             .flatten()
-                            .flat_map(|iface| iface.ips.iter())
                             .collect::<Vec<_>>()
                     })
                     .collect::<Vec<_>>();
 
-                stream::iter(ip_deletions)
+                stream::iter(if_deletions)
                     .map(|ip_hash| async move {
-                        let ip = Ip::get(ip_hash, ctx).await?;
-                        ip.delete(ctx).await?;
+                        let iface = Interface::get(ip_hash, ctx).await?;
+                        iface.delete(ctx).await?;
                         Ok::<(), anyhow::Error>(())
                     })
                     .buffer_unordered(batch_size)
@@ -421,6 +439,7 @@ impl Node {
 
         let mut result = Vec::new();
         for interface in &network.interfaces {
+            let interface = Interface::get(interface, ctx).await?;
             for h in &interface.ips {
                 let ip = Ip::get(h, ctx).await?;
                 result.push(ip.address);

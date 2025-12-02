@@ -30,6 +30,7 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
     let mut children = Vec::new();
     if let Some(network) = &node.network {
         for interface in &network.interfaces {
+            let interface = Interface::get(interface, &ctx).await?;
             children.extend(interface.ips.clone());
         }
     }
@@ -71,6 +72,8 @@ pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
         match entity.kind {
             EntityKind::Node { inner } => inner.delete(&ctx).await?,
             EntityKind::Domain { inner } => inner.delete(&ctx).await?,
+            EntityKind::Ip { inner } => inner.delete(&ctx).await?,
+            EntityKind::Url { inner } => inner.delete(&ctx).await?,
             _ => todo!(),
         };
     };
