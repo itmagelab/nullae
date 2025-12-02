@@ -3,6 +3,7 @@ use std::{net::IpAddr, str::FromStr};
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
+use super::interface::Interface;
 use crate::prelude::*;
 
 /// Operating system information
@@ -37,17 +38,10 @@ pub struct StorageDevice {
     pub size: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct NetworkInterface {
-    pub name: String,
-    pub mac: Option<String>,
-    pub ips: Vec<HashID>,
-}
-
 /// Network information
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkInfo {
-    pub interfaces: Vec<NetworkInterface>,
+    pub interfaces: Vec<Interface>,
 }
 
 #[derive(Default, Serialize, Deserialize, Debug, Indexable, Entity)]
@@ -157,8 +151,7 @@ impl std::fmt::Display for Node {
         {
             writeln!(f, "  → Network Interfaces:")?;
             for interface in &network.interfaces {
-                let mac = interface.mac.as_deref().unwrap_or("Unknown MAC");
-                writeln!(f, "    → {}: [{}]", interface.name, mac)?;
+                writeln!(f, "    → {}", interface.name)?;
                 if !interface.ips.is_empty() {
                     let ips = interface
                         .ips
@@ -332,17 +325,16 @@ impl Node {
 
         for (name, data) in &networks {
             let mut ips = Vec::new();
+            let mut interface = Interface::new(name, &self.hash)?;
+
             for ip_net in data.ip_networks() {
                 let ip_addr = ip_net.addr.to_string();
-                let ip_entity = Ip::create(&ip_addr, ip_net.prefix, &self.hash, ctx).await?;
-                ips.push(ip_entity.hash);
+                let ip = Ip::create(&ip_addr, ip_net.prefix, &interface.hash, ctx).await?;
+                ips.push(ip.hash);
             }
 
-            interfaces.push(NetworkInterface {
-                name: name.clone(),
-                mac: Some(data.mac_address().to_string()),
-                ips,
-            });
+            interface.add_ips(ips);
+            interfaces.push(interface);
         }
 
         self.network = Some(NetworkInfo { interfaces });
@@ -383,6 +375,17 @@ impl Node {
     }
 
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
+        // 1. Delete all dependent IP addresses from network interfaces
+        if let Some(network) = &self.network {
+            for interface in &network.interfaces {
+                for ip_hash in &interface.ips {
+                    let ip = Ip::get(ip_hash, ctx).await?;
+                    ip.delete(ctx).await?;
+                }
+            }
+        }
+
+        // 2. Remove Node from parent Domain
         let Some(mut domain_entity) = ctx.storage().get_by_hash(&self.domain.as_hex()).await?
         else {
             anyhow::bail!(
@@ -395,6 +398,7 @@ impl Node {
         domain_entity.remove_child(&self.hash.as_hex());
         ctx.storage().put(&domain_entity).await?;
 
+        // 3. Delete the Node itself
         ctx.storage().delete(&self.into()).await?;
 
         Ok(())
@@ -418,6 +422,33 @@ impl Node {
 
         stream::iter(nodes_by_domain)
             .map(|(domain_hash, domain_nodes)| async move {
+                // 1. Delete all dependent IP addresses for all nodes in parallel
+                let ip_deletions = domain_nodes
+                    .iter()
+                    .flat_map(|node| {
+                        node.network
+                            .as_ref()
+                            .map(|net| net.interfaces.iter())
+                            .into_iter()
+                            .flatten()
+                            .flat_map(|iface| iface.ips.iter())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect::<Vec<_>>();
+
+                stream::iter(ip_deletions)
+                    .map(|ip_hash| async move {
+                        let ip = Ip::get(ip_hash, ctx).await?;
+                        ip.delete(ctx).await?;
+                        Ok::<(), anyhow::Error>(())
+                    })
+                    .buffer_unordered(batch_size)
+                    .collect::<Vec<_>>()
+                    .await
+                    .into_iter()
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+
+                // 2. Remove nodes from parent domain
                 let Some(mut domain_entity) = ctx.storage().get_by_hash(&domain_hash).await? else {
                     anyhow::bail!("Can't find domain with hash: {}", domain_hash);
                 };
@@ -428,6 +459,7 @@ impl Node {
 
                 ctx.storage().put(&domain_entity).await?;
 
+                // 3. Delete the nodes themselves
                 stream::iter(domain_nodes)
                     .map(|node| async move {
                         let node_entity: Entity = node.into();

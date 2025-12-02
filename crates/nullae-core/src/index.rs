@@ -80,10 +80,11 @@ impl Index {
 
     pub(crate) fn from_entity(entity: &Entity) -> anyhow::Result<Self> {
         match &entity.kind {
-            EntityKind::Node { inner, .. } => inner.index(),
-            EntityKind::Domain { inner, .. } => inner.index(),
-            EntityKind::Ip { inner, .. } => inner.index(),
-            EntityKind::Url { inner, .. } => inner.index(),
+            EntityKind::Node { inner } => inner.index(),
+            EntityKind::Domain { inner } => inner.index(),
+            EntityKind::Ip { inner } => inner.index(),
+            EntityKind::Url { inner } => inner.index(),
+            EntityKind::Interface { inner: _ } => Ok(Index::new()),
         }
     }
 

@@ -5,7 +5,7 @@ use nullae_macros::{Entity, Indexable};
 use serde::{Deserialize, Serialize};
 use tabled::Tabled;
 
-#[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, Indexable, Entity)]
 pub struct Ip {
     pub(crate) hash: HashID,
     #[index]

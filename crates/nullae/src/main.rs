@@ -42,8 +42,14 @@ pub struct Cli {
 pub async fn main() {
     dotenvy::dotenv().ok();
 
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("0ae=debug,trace=warn"));
+
     fmt()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_file(true)
+        .with_line_number(true)
+        .with_target(true)
+        .with_env_filter(filter)
         .compact()
         .init();
 

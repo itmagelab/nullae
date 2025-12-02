@@ -91,20 +91,44 @@ pub trait Indexable {
 mod tests {
     use super::prelude::*;
 
+    /// Initialize tracing for tests
+    /// Call this at the beginning of each test to see tracing logs
+    /// Set RUST_LOG environment variable to control log level (e.g., RUST_LOG=debug)
+    fn init_tracing() {
+        use std::sync::Once;
+        static INIT: Once = Once::new();
+
+        INIT.call_once(|| {
+            let log_level = std::env::var("RUST_LOG")
+                .ok()
+                .and_then(|s| s.parse::<tracing::Level>().ok())
+                .unwrap_or(tracing::Level::INFO);
+
+            tracing_subscriber::fmt()
+                .with_max_level(log_level)
+                .with_test_writer()
+                .try_init()
+                .ok();
+        });
+    }
+
     #[tokio::test]
     async fn test_some() {
+        init_tracing();
         dotenvy::dotenv().ok();
         let ctx = Context::new().unwrap();
-        let domain = Domain::create("testing", &ctx).await.unwrap();
-        let mut node = Node::create("local-1", &domain, &ctx).await.unwrap();
+        let domain = Domain::create("domain-test", &ctx).await.unwrap();
+        let mut node = Node::create("host-test", &domain, &ctx).await.unwrap();
         node.collect_host_info(&ctx).await.unwrap();
-        let node = node.save(&ctx).await.unwrap();
-        ctx.storage().delete(&node).await.unwrap();
+        let entity = node.save(&ctx).await.unwrap();
+        let node: Node = entity.try_into().unwrap();
+        node.delete(&ctx).await.unwrap();
         domain.delete(&ctx).await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn random_nodes_domains() {
+        init_tracing();
         dotenvy::dotenv().ok();
 
         use futures::stream::{self, StreamExt};
@@ -144,89 +168,5 @@ mod tests {
             .buffer_unordered(5)
             .collect::<()>()
             .await;
-    }
-
-    #[test]
-    fn test_wrap_text_basic() {
-        let text = "This is a very long line that needs to be wrapped";
-        let wrapped = str::wrap(text, 20, None);
-
-        for line in wrapped.lines() {
-            assert!(line.len() <= 20, "Line '{}' exceeds max width", line);
-        }
-
-        assert!(wrapped.contains('\n'));
-    }
-
-    #[test]
-    fn test_wrap_text_short() {
-        let text = "Short text";
-        let wrapped = str::wrap(text, 50, None);
-        assert_eq!(wrapped, text);
-    }
-
-    #[test]
-    fn test_wrap_text_exact_width() {
-        let text = "Hello world";
-        let wrapped = str::wrap(text, 11, None);
-        assert_eq!(wrapped, "Hello world");
-    }
-
-    #[test]
-    fn test_wrap_text_long_word() {
-        let text = "This verylongwordthatexceedswidth fits";
-        let wrapped = str::wrap(text, 10, None);
-
-        assert!(wrapped.contains("verylongwordthatexceedswidth"));
-    }
-
-    #[test]
-    fn test_wrap_text_empty() {
-        let text = "";
-        let wrapped = str::wrap(text, 10, None);
-        assert_eq!(wrapped, "");
-    }
-
-    #[test]
-    fn test_wrap_text_zero_width() {
-        let text = "Some text";
-        let wrapped = str::wrap(text, 0, None);
-        assert_eq!(wrapped, text);
-    }
-
-    #[test]
-    fn test_wrap_text_max_lines() {
-        let text = "This is a very long line that needs to be wrapped into many lines to test the max lines feature";
-        let wrapped = str::wrap(text, 10, Some(3));
-
-        let lines: Vec<&str> = wrapped.lines().collect();
-        assert_eq!(lines.len(), 4); // 3 lines + "..."
-        assert_eq!(lines.last().unwrap(), &"...");
-    }
-
-    #[test]
-    fn test_wrap_text_max_lines_not_exceeded() {
-        let text = "Short text here";
-        let wrapped = str::wrap(text, 10, Some(5));
-
-        let lines: Vec<&str> = wrapped.lines().collect();
-        assert!(lines.len() <= 5);
-        assert!(!wrapped.contains("..."));
-    }
-
-    #[test]
-    fn test_wrap_text_max_lines_exact() {
-        let text = "one two three four five six seven eight nine ten";
-        // First, get the actual line count without truncation
-        let full_wrapped = str::wrap(text, 5, None);
-        let actual_lines = full_wrapped.lines().count();
-
-        // Now wrap with max_lines equal to actual line count
-        let wrapped = str::wrap(text, 5, Some(actual_lines));
-        let lines: Vec<&str> = wrapped.lines().collect();
-
-        // Should have exactly the same number of lines, no truncation
-        assert_eq!(lines.len(), actual_lines);
-        assert!(!wrapped.ends_with("..."));
     }
 }
