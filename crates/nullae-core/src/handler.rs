@@ -58,15 +58,21 @@ pub async fn list() -> Result<(), anyhow::Error> {
 pub async fn delete(pattern: String) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
     let mut entities = ctx.storage().find(&pattern).await?;
+
     let same = if let Some(first) = entities.first() {
         entities.iter().all(|e| e.hashid() == first.hashid())
     } else {
         true
     };
+
     if let Some(entity) = entities.pop()
         && same
     {
-        ctx.storage().delete(&entity).await?;
+        match entity.kind {
+            EntityKind::Node { inner } => inner.delete(&ctx).await?,
+            EntityKind::Domain { inner } => inner.delete(&ctx).await?,
+            _ => todo!(),
+        };
     };
 
     Ok(())

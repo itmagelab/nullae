@@ -70,6 +70,14 @@ impl Domain {
         })
     }
 
+    pub async fn entity<S: Storage + Sync>(&self, ctx: &Context<S>) -> anyhow::Result<Entity> {
+        let domains = ctx.storage().get_by_hash(&self.hash.as_hex()).await?;
+        let Some(entity) = domains else {
+            anyhow::bail!("Can't find domain for hash: {}", self.hash);
+        };
+        Ok(entity)
+    }
+
     pub async fn get<S: Storage + Sync>(hash: &HashID, ctx: &Context<S>) -> anyhow::Result<Self> {
         let domains = ctx.storage().get_by_hash(&hash.as_hex()).await?;
         let Some(entity) = domains else {
@@ -80,8 +88,8 @@ impl Domain {
 
     pub async fn create<S: Storage + Sync>(name: &str, ctx: &Context<S>) -> anyhow::Result<Self> {
         let domain = Self::new(name)?;
-        if let Ok(domain) = Domain::get(&domain.hash, ctx).await {
-            return Ok(domain);
+        if let Ok(entity) = domain.entity(ctx).await {
+            return entity.try_into();
         };
         domain.save(ctx).await
     }
@@ -92,12 +100,12 @@ impl Domain {
     }
 
     pub async fn delete<S: Storage + Sync>(self, ctx: &Context<S>) -> anyhow::Result<()> {
-        let entity = match ctx.storage().get_by_hash(&self.hash.as_hex()).await? {
-            Some(d) => d,
-            None => {
-                let domain = Domain::get(&self.hash, ctx).await?;
-                domain.into()
-            }
+        let entity: Entity = self.entity(ctx).await?;
+        if entity.has_children() {
+            anyhow::bail!(
+                "Can't delete domain with children: {:?}",
+                entity.metadata.children
+            );
         };
         ctx.storage().delete(&entity).await?;
         Ok(())
