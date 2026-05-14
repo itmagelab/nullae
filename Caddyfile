@@ -2,7 +2,7 @@
   auto_https off
 }
 
-http://localhost:3000 {
+:3000 {
   log
   reverse_proxy 0api:3000
 }

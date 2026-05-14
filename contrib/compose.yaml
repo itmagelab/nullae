@@ -17,6 +17,7 @@ services:
     scale: 1
     command: /bin/0api
     environment:
+      NULLAE_DOMAIN: s.0ae.ru
       RUST_LOG: debug
       NULLAE_CONSUL_URL: http://consul-lb:8500
 
