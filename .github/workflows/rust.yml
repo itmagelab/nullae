@@ -24,7 +24,7 @@ env:
 
 jobs:
   build-and-scan:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Run Consul
