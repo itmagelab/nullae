@@ -61,12 +61,16 @@ async fn redirect(
 
 async fn redirect_handler(hash: &str) -> anyhow::Result<String> {
     let ctx = Context::new()?;
-    let original_url = if let Some(entity) = ctx.storage().get(hash).await? {
+
+    let mut vec = ctx.storage().find_by_index("slug", hash).await?;
+
+    let original_url = if let Some(entity) = vec.pop() {
         let EntityKind::Url { inner, .. } = entity.kind else {
             anyhow::bail!("Invalid URL entity");
         };
         inner.url().to_string()
     } else {
+        tracing::error!("Could not find entity for hash {}", hash);
         todo!();
     };
     Ok(original_url)
