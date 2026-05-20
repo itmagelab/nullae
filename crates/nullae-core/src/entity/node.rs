@@ -269,7 +269,7 @@ impl std::fmt::Display for Node {
                 let has_ips = !interface.ips.is_empty();
                 let has_real_mac = interface.mac.as_deref().unwrap_or("00:00:00:00:00:00")
                     != "00:00:00:00:00:00"
-                    && interface.mac.as_deref().unwrap_or("") != "";
+                    && !interface.mac.as_deref().unwrap_or("").is_empty();
 
                 if has_ips || has_real_mac {
                     let mac = interface.mac.as_deref().unwrap_or("No MAC").to_string();

@@ -269,7 +269,7 @@ pub fn render_tabled_card<T: Tabled>(item: &T, header_title: &str) -> String {
     let values = item.fields();
     let mut props = Vec::new();
 
-    for (h, v) in headers.into_iter().zip(values.into_iter()) {
+    for (h, v) in headers.into_iter().zip(values) {
         let val_str = v.into_owned();
         let val_trimmed = val_str.trim();
         let display_val = if val_trimmed.is_empty() {
@@ -285,7 +285,7 @@ pub fn render_tabled_card<T: Tabled>(item: &T, header_title: &str) -> String {
 
     let mut table = tabled::Table::new(props);
     table.with(Style::rounded());
-    table.with(Panel::header(header_title.to_string()));
+    table.with(Panel::header(header_title));
 
     table.to_string()
 }
