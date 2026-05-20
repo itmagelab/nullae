@@ -123,3 +123,52 @@ impl Index {
     //     Ok(())
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_item_creation_and_path() {
+        let hash = HashID::from_str(&"somehash".hash()).unwrap();
+        let item = Item::new("hostname", "my-host", &hash).unwrap();
+        assert_eq!(item.path(), "0ae/index/hostname/my-host");
+        assert!(!item.is_empty());
+    }
+
+    #[test]
+    fn test_item_merge() {
+        let hash1 = HashID::from_str(&"hash1".hash()).unwrap();
+        let hash2 = HashID::from_str(&"hash2".hash()).unwrap();
+
+        let mut item1 = Item::new("tag", "web", &hash1).unwrap();
+        let item2 = Item::new("tag", "web", &hash2).unwrap();
+
+        item1.merge(item2);
+        let values = item1.value();
+        assert_eq!(values.len(), 2);
+        assert!(values.contains(&hash1));
+        assert!(values.contains(&hash2));
+    }
+
+    #[test]
+    fn test_item_subtract() {
+        let hash1 = HashID::from_str(&"hash1".hash()).unwrap();
+        let hash2 = HashID::from_str(&"hash2".hash()).unwrap();
+
+        let mut item1 = Item::new("tag", "web", &hash1).unwrap();
+        // Manually merge first to have both
+        let item2 = Item::new("tag", "web", &hash2).unwrap();
+        item1.merge(item2);
+
+        // Now subtract
+        let to_subtract = Item::new("tag", "web", &hash1).unwrap();
+        item1.subtract(to_subtract);
+
+        let values = item1.value();
+        assert_eq!(values.len(), 1);
+        assert!(values.contains(&hash2));
+    }
+}
+

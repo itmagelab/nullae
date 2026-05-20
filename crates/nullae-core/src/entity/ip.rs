@@ -92,3 +92,35 @@ impl Ip {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ip_creation_success() {
+        let parent = HashID::from_str(&"abc".hash()).unwrap();
+        let ip = Ip::new("192.168.1.1", 24, &parent).unwrap();
+        assert_eq!(ip.address, "192.168.1.1");
+        assert_eq!(ip.prefix, 24);
+
+        let ipv6 = Ip::new("2001:db8::1", 64, &parent).unwrap();
+        assert_eq!(ipv6.address, "2001:db8::1");
+        assert_eq!(ipv6.prefix, 64);
+    }
+
+    #[test]
+    fn test_ip_creation_invalid_format() {
+        let parent = HashID::from_str(&"abc".hash()).unwrap();
+        let err = Ip::new("invalid-ip", 24, &parent).unwrap_err();
+        assert!(err.to_string().contains("Invalid IP address format"));
+    }
+
+    #[test]
+    fn test_ip_creation_empty() {
+        let parent = HashID::from_str(&"abc".hash()).unwrap();
+        let err = Ip::new("  ", 24, &parent).unwrap_err();
+        assert_eq!(err.to_string(), "IP address cannot be empty or whitespace-only");
+    }
+}
+

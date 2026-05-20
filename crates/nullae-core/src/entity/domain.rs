@@ -103,3 +103,30 @@ impl Domain {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_domain_creation_success() {
+        let domain = Domain::new("example.com").unwrap();
+        assert_eq!(domain.name, "example.com");
+        assert!(domain.description.is_none());
+        assert!(!domain.hash.as_hex().is_empty());
+    }
+
+    #[test]
+    fn test_domain_creation_empty_err() {
+        let err = Domain::new("   ").unwrap_err();
+        assert_eq!(err.to_string(), "Domain name cannot be empty or whitespace-only");
+    }
+
+    #[test]
+    fn test_domain_creation_too_long_err() {
+        let name = "a".repeat(256);
+        let err = Domain::new(name).unwrap_err();
+        assert!(err.to_string().contains("Domain name cannot exceed 255 characters"));
+    }
+}
+

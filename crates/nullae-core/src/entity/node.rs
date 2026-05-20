@@ -498,3 +498,48 @@ fn get_host_info() -> (String, String) {
 
     (hostname, domain)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_node_creation_success() {
+        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
+        let node = Node::new("server-01", &domain_hash).unwrap();
+        assert_eq!(node.hostname, "server-01");
+        assert_eq!(node.domain, domain_hash);
+        assert!(node.os_info.is_none());
+    }
+
+    #[test]
+    fn test_node_creation_empty_hostname() {
+        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
+        let err = Node::new("   ", &domain_hash).unwrap_err();
+        assert_eq!(err.to_string(), "Node hostname cannot be empty or whitespace-only");
+    }
+
+    #[test]
+    fn test_node_creation_too_long_hostname() {
+        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
+        let name = "a".repeat(256);
+        let err = Node::new(name, &domain_hash).unwrap_err();
+        assert!(err.to_string().contains("Node hostname cannot exceed 255 characters"));
+    }
+
+    #[test]
+    fn test_node_builder_methods() {
+        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
+        let mut node = Node::new("server-01", &domain_hash).unwrap()
+            .with_environment("staging")
+            .with_tags(vec!["web".to_string(), "api".to_string()]);
+        assert_eq!(node.environment.as_deref(), Some("staging"));
+        assert_eq!(node.tags.as_ref().unwrap().len(), 2);
+
+        assert!(node.last_seen.is_none());
+        node.heartbeat();
+        assert!(node.last_seen.is_some());
+    }
+}
+
