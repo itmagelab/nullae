@@ -15,7 +15,6 @@ use tabled::{
     settings::{
         Format, Style,
         object::{Columns, Object, Rows},
-        style::{HorizontalLine, LineText, VerticalLine},
     },
 };
 
@@ -236,24 +235,22 @@ where
     if vec.is_empty() {
         return;
     }
+    println!("📦 {} (Total: {})", title.to_uppercase(), vec.len());
     let mut table = tabled::Table::new(vec);
-    table.with(
-        Style::modern()
-            .horizontals([(1, HorizontalLine::inherit(Style::modern()))])
-            .verticals([(1, VerticalLine::inherit(Style::modern()))])
-            .remove_horizontal(),
-    );
-    table.with(LineText::new(title, Rows::first()).offset(1));
+    table.with(Style::rounded());
     table.modify(
-        Columns::one(0).not(Rows::first()),
+        Columns::first(),
         Format::content(|s| {
-            let short: String = s.chars().take(SHORT_HASH).collect();
-            short
+            if s.len() > SHORT_HASH {
+                s.chars().take(SHORT_HASH).collect::<String>()
+            } else {
+                s.to_string()
+            }
         }),
     );
     table.modify(
         Segment::all().not(Rows::first()),
-        Format::content(|s| s.wrap(32, Some(7))),
+        Format::content(|s| s.wrap(40, None)),
     );
     println!("{table}");
     println!();

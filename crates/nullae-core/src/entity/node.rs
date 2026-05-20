@@ -68,19 +68,22 @@ pub struct Node {
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]
 pub struct NodeView {
+    #[tabled(rename = "Hash")]
     pub hash: String,
+    #[tabled(rename = "Hostname")]
     pub hostname: String,
+    #[tabled(rename = "Domain")]
     pub domain: String,
-    pub os_type: String,
-    pub arch: String,
+    #[tabled(rename = "OS (Arch)")]
+    pub os: String,
+    #[tabled(rename = "Specs (CPU/RAM/Disk)")]
+    pub specs: String,
+    #[tabled(rename = "IP Addresses")]
     pub ips: String,
-    pub cpu_cores: String,
-    pub total_memory_gb: String,
-    pub storage: String,
-    pub last_seen: String,
+    #[tabled(rename = "Env")]
     pub environment: String,
+    #[tabled(rename = "Tags")]
     pub tags: String,
-    pub description: String,
 }
 
 impl NodeView {
@@ -91,48 +94,70 @@ impl NodeView {
         let hostname = n.hostname.clone();
         let domain = n.domain.clone();
         let domain = Domain::get(&domain, ctx).await?.name;
-        let ips = n.ips(ctx).await?;
 
-        let storage = n
+        let mut raw_ips = Vec::new();
+        if let Some(network) = &n.network {
+            for interface in &network.interfaces {
+                for h in &interface.ips {
+                    let ip = Ip::get(h, ctx).await?;
+                    raw_ips.push(ip.address);
+                }
+            }
+        }
+        raw_ips.sort_by_key(|s| {
+            let ip: std::net::IpAddr = s.parse().unwrap_or_else(|_| "127.0.0.1".parse().unwrap());
+            match ip {
+                std::net::IpAddr::V4(_) => 0,
+                std::net::IpAddr::V6(_) => 1,
+            }
+        });
+        
+        let ips = if raw_ips.is_empty() {
+            "—".to_string()
+        } else if raw_ips.len() > 3 {
+            format!("{}, +{} more", raw_ips[..3].join(", "), raw_ips.len() - 3)
+        } else {
+            raw_ips.join(", ")
+        };
+
+        let os = n
+            .os_info
+            .as_ref()
+            .map(|os| format!("{} ({})", os.os_type, os.arch))
+            .unwrap_or_else(|| "—".to_string());
+
+        let specs = n
             .hardware
             .as_ref()
-            .and_then(|h| h.storage.as_ref())
-            .map(|s| {
-                let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
-                format!("{} GB", total)
+            .map(|hw| {
+                let storage = hw
+                    .storage
+                    .as_ref()
+                    .map(|s| {
+                        let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
+                        format!("{}GB Disk", total)
+                    })
+                    .unwrap_or_else(|| "—".to_string());
+                format!("{}c / {}GB RAM / {}", hw.cpu_cores, hw.total_memory_gb, storage)
             })
-            .unwrap_or_default();
+            .unwrap_or_else(|| "—".to_string());
+
+        let tags = n.tags();
+        let tags = if tags.is_empty() {
+            "—".to_string()
+        } else {
+            tags
+        };
 
         Ok(NodeView {
             hash: n.hash.to_string(),
             hostname,
             domain,
-            description: n.description.clone().unwrap_or_default(),
-            os_type: n
-                .os_info
-                .as_ref()
-                .map(|os| os.os_type.clone())
-                .unwrap_or_default(),
-            arch: n
-                .os_info
-                .as_ref()
-                .map(|os| os.arch.clone())
-                .unwrap_or_default(),
+            os,
+            specs,
             ips,
-            cpu_cores: n
-                .hardware
-                .as_ref()
-                .map(|hw| hw.cpu_cores.to_string())
-                .unwrap_or_default(),
-            total_memory_gb: n
-                .hardware
-                .as_ref()
-                .map(|hw| hw.total_memory_gb.to_string())
-                .unwrap_or_default(),
-            storage,
-            last_seen: n.last_seen(),
-            environment: n.environment.clone().unwrap_or_default(),
-            tags: n.tags(),
+            environment: n.environment.clone().unwrap_or_else(|| "—".to_string()),
+            tags,
         })
     }
 }
@@ -514,7 +539,8 @@ impl Node {
         Ok(())
     }
 
-    async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
+    #[allow(dead_code)]
+    pub(crate) async fn ips<S: Storage>(&self, ctx: &Context<S>) -> anyhow::Result<String> {
         let Some(network) = &self.network else {
             return Ok(String::new());
         };
@@ -537,7 +563,8 @@ impl Node {
         Ok(result.join(" "))
     }
 
-    fn last_seen(&self) -> String {
+    #[allow(dead_code)]
+    pub(crate) fn last_seen(&self) -> String {
         self.last_seen
             .map(|x| {
                 if let Some(datetime) = chrono::DateTime::from_timestamp(x, 0) {
