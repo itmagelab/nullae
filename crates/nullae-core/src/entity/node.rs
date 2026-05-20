@@ -139,78 +139,144 @@ impl NodeView {
 
 impl std::fmt::Display for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        #[derive(tabled::Tabled)]
+        struct NodeProperty {
+            #[tabled(rename = "System Property")]
+            property: String,
+            #[tabled(rename = "Value")]
+            value: String,
+        }
+
+        let mut props = Vec::new();
+        props.push(NodeProperty {
+            property: "Hostname".to_string(),
+            value: self.hostname.clone(),
+        });
+        props.push(NodeProperty {
+            property: "Domain".to_string(),
+            value: self.domain.short_hash_decorated(),
+        });
+        props.push(NodeProperty {
+            property: "Node Hash".to_string(),
+            value: self.hash.as_hex(),
+        });
+
+        if let Some(os_info) = &self.os_info {
+            props.push(NodeProperty {
+                property: "OS".to_string(),
+                value: format!("{} ({})", os_info.os_type, os_info.arch),
+            });
+        }
+
+        if let Some(hardware) = &self.hardware {
+            props.push(NodeProperty {
+                property: "CPU".to_string(),
+                value: format!("{} ({} cores)", hardware.cpu_model, hardware.cpu_cores),
+            });
+            props.push(NodeProperty {
+                property: "RAM".to_string(),
+                value: format!("{} GB RAM", hardware.total_memory_gb),
+            });
+
+            if let Some(storage) = &hardware.storage {
+                for disk in storage {
+                    props.push(NodeProperty {
+                        property: "Storage".to_string(),
+                        value: format!(
+                            "{} ({:.1} GB)",
+                            disk.model,
+                            disk.size as f64 / 1024.0 / 1024.0 / 1024.0
+                        ),
+                    });
+                }
+            }
+        }
+
+        if let Some(env) = &self.environment {
+            props.push(NodeProperty {
+                property: "Environment".to_string(),
+                value: env.clone(),
+            });
+        }
+
+        if let Some(tags) = &self.tags
+            && !tags.is_empty()
+        {
+            props.push(NodeProperty {
+                property: "Tags".to_string(),
+                value: tags.join(", "),
+            });
+        }
+
+        let mut prop_table = tabled::Table::new(props);
+        prop_table.with(tabled::settings::Style::rounded());
+
         let desc = match &self.description {
             Some(d) => d.as_str(),
             None => &self.hostname,
         };
-        writeln!(f, "Node ➤ {}", desc)?;
-        writeln!(f, "  → Hostname: {}", self.hostname)?;
-        writeln!(f, "  → Domain: {}", self.domain)?;
-        writeln!(f, "  → Hash: {}", self.hash)?;
+        let header_title = format!("🖳  NODE CARD: {}", desc);
+        prop_table.with(tabled::settings::Panel::header(header_title));
 
-        // System information
-        if let Some(os_info) = &self.os_info {
-            writeln!(f, "  → OS: {} ({})", os_info.os_type, os_info.arch)?;
-        }
+        writeln!(f, "{}", prop_table)?;
+
+        // Network interfaces table
         if let Some(network) = &self.network
             && !network.interfaces.is_empty()
         {
-            writeln!(f, "  → Network Interfaces:")?;
-            for interface in &network.interfaces {
-                let mac = interface.mac.as_deref().unwrap_or("Unknown MAC");
-                writeln!(f, "    → {}: [{}]", interface.name, mac)?;
-                if !interface.ips.is_empty() {
-                    let ips = interface
-                        .ips
-                        .iter()
-                        .map(|h| h.as_hex())
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                        .wrap(40, None);
-                    writeln!(f, "      → IPs: \n{}", ips)?;
-                }
+            #[derive(tabled::Tabled)]
+            struct NetIface {
+                #[tabled(rename = "Interface")]
+                interface: String,
+                #[tabled(rename = "MAC Address")]
+                mac: String,
+                #[tabled(rename = "IP Addresses (Hash)")]
+                ips: String,
             }
-        }
-        if let Some(hardware) = &self.hardware {
-            writeln!(
-                f,
-                "  → CPU: {} ({} cores), {} GB RAM",
-                hardware.cpu_model, hardware.cpu_cores, hardware.total_memory_gb
-            )?;
-            if let Some(modules) = &hardware.memory_modules {
-                for module in modules {
-                    write!(
-                        f,
-                        "  → RAM: {} ({} GB)",
-                        module.label,
-                        module.size / 1024 / 1024 / 1024
-                    )?;
-                    if let Some(speed) = module.speed_mhz {
-                        write!(f, " @ {} MHz", speed)?;
-                    }
-                    writeln!(f)?;
-                }
-            }
-            if let Some(storage) = &hardware.storage {
-                for disk in storage {
-                    writeln!(
-                        f,
-                        "  → Disk: {} ({:.2} GB)",
-                        disk.model,
-                        disk.size as f64 / 1024.0 / 1024.0 / 1024.0
-                    )?;
-                }
-            }
-        }
 
-        // Operational information
-        if let Some(env) = &self.environment {
-            writeln!(f, "  → Environment: {}", env)?;
-        }
-        if let Some(tags) = &self.tags
-            && !tags.is_empty()
-        {
-            writeln!(f, "  → Tags: {}", tags.join(", "))?;
+            let mut active_ifaces = Vec::new();
+            let mut inactive_names = Vec::new();
+
+            for interface in &network.interfaces {
+                let has_ips = !interface.ips.is_empty();
+                let has_real_mac = interface.mac.as_deref().unwrap_or("00:00:00:00:00:00") != "00:00:00:00:00:00"
+                    && interface.mac.as_deref().unwrap_or("") != "";
+
+                if has_ips || has_real_mac {
+                    let mac = interface.mac.as_deref().unwrap_or("No MAC").to_string();
+                    let ips_str = if interface.ips.is_empty() {
+                        "—".to_string()
+                    } else {
+                        interface
+                            .ips
+                            .iter()
+                            .map(|h| h.short_hash_decorated())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+
+                    active_ifaces.push(NetIface {
+                        interface: interface.name.clone(),
+                        mac,
+                        ips: ips_str,
+                    });
+                } else {
+                    inactive_names.push(interface.name.clone());
+                }
+            }
+
+            if !active_ifaces.is_empty() {
+                let mut net_table = tabled::Table::new(active_ifaces);
+                net_table.with(tabled::settings::Style::rounded());
+                net_table.with(tabled::settings::Panel::header("🖧  NETWORK INTERFACES (Active)"));
+                writeln!(f, "{}", net_table)?;
+            }
+
+            if !inactive_names.is_empty() {
+                inactive_names.sort();
+                writeln!(f, "  Inactive/Virtual: {}", inactive_names.join(", "))?;
+                writeln!(f)?;
+            }
         }
 
         Ok(())
