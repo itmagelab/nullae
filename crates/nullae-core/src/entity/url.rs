@@ -7,9 +7,12 @@ use crate::{SHORT_HASH, prelude::*};
 
 #[derive(Serialize, Deserialize, Debug, Tabled, Indexable, Entity)]
 pub struct Url {
+    #[tabled(rename = "URL Hash")]
     pub(crate) hash: HashID,
     #[index]
+    #[tabled(rename = "Short Slug")]
     pub(crate) slug: String,
+    #[tabled(rename = "Target URL")]
     pub(crate) url: url::Url,
 }
 
@@ -32,39 +35,7 @@ impl From<&Url> for UrlView {
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[derive(tabled::Tabled)]
-        struct UrlProp {
-            #[tabled(rename = "Property")]
-            property: String,
-            #[tabled(rename = "Value")]
-            value: String,
-        }
-
-        let mut props = Vec::new();
-        props.push(UrlProp {
-            property: "Short Slug".to_string(),
-            value: self.slug.clone(),
-        });
-        props.push(UrlProp {
-            property: "Target URL".to_string(),
-            value: self.url.to_string(),
-        });
-        props.push(UrlProp {
-            property: "URL Hash".to_string(),
-            value: self.hash.as_hex(),
-        });
-        if let Ok(short) = self.short_url() {
-            props.push(UrlProp {
-                property: "Short URL".to_string(),
-                value: short,
-            });
-        }
-
-        let mut table = tabled::Table::new(props);
-        table.with(tabled::settings::Style::rounded());
-        table.with(tabled::settings::Panel::header("🔗  URL DETAILS"));
-
-        write!(f, "{}", table)
+        write!(f, "{}", crate::entity::render_tabled_card(self, "🔗  URL DETAILS"))
     }
 }
 

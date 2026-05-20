@@ -7,9 +7,12 @@ use tabled::Tabled;
 
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Ip {
+    #[tabled(rename = "IP Hash")]
     pub(crate) hash: HashID,
     #[index]
+    #[tabled(rename = "IP Address")]
     pub(crate) address: String,
+    #[tabled(rename = "Prefix")]
     pub prefix: u8,
 }
 
@@ -31,29 +34,7 @@ impl From<&Ip> for IpView {
 
 impl std::fmt::Display for Ip {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[derive(tabled::Tabled)]
-        struct IpProp {
-            #[tabled(rename = "Property")]
-            property: String,
-            #[tabled(rename = "Value")]
-            value: String,
-        }
-
-        let mut props = Vec::new();
-        props.push(IpProp {
-            property: "IP Address".to_string(),
-            value: format!("{}/{}", self.address, self.prefix),
-        });
-        props.push(IpProp {
-            property: "IP Hash".to_string(),
-            value: self.hash.as_hex(),
-        });
-
-        let mut table = tabled::Table::new(props);
-        table.with(tabled::settings::Style::rounded());
-        table.with(tabled::settings::Panel::header("🖧  IP ADDRESS DETAILS"));
-
-        write!(f, "{}", table)
+        write!(f, "{}", crate::entity::render_tabled_card(self, "🖧  IP ADDRESS DETAILS"))
     }
 }
 

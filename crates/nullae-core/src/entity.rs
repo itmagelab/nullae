@@ -13,7 +13,7 @@ use tabled::settings::object::Segment;
 use tabled::{
     Tabled,
     settings::{
-        Format, Style,
+        Format, Style, Panel,
         object::{Columns, Object, Rows},
     },
 };
@@ -254,4 +254,38 @@ where
     );
     println!("{table}");
     println!();
+}
+
+pub fn render_tabled_card<T: Tabled>(item: &T, header_title: &str) -> String {
+    #[derive(tabled::Tabled)]
+    struct KeyValueRow {
+        #[tabled(rename = "Property")]
+        property: String,
+        #[tabled(rename = "Value")]
+        value: String,
+    }
+
+    let headers = T::headers();
+    let values = item.fields();
+    let mut props = Vec::new();
+
+    for (h, v) in headers.into_iter().zip(values.into_iter()) {
+        let val_str = v.into_owned();
+        let val_trimmed = val_str.trim();
+        let display_val = if val_trimmed.is_empty() {
+            "—".to_string()
+        } else {
+            val_str
+        };
+        props.push(KeyValueRow {
+            property: h.into_owned(),
+            value: display_val,
+        });
+    }
+
+    let mut table = tabled::Table::new(props);
+    table.with(Style::rounded());
+    table.with(Panel::header(header_title.to_string()));
+    
+    table.to_string()
 }

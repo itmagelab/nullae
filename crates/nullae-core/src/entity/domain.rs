@@ -8,10 +8,12 @@ use tabled::derive::display;
 
 #[derive(Default, Serialize, Deserialize, Debug, Tabled, Clone, Indexable, Entity)]
 pub struct Domain {
+    #[tabled(rename = "Domain Hash")]
     pub(crate) hash: HashID,
     #[index]
+    #[tabled(rename = "Domain Name")]
     pub(crate) name: String,
-    #[tabled(display("display::option", ""))]
+    #[tabled(rename = "Description", display("display::option", ""))]
     pub(crate) description: Option<String>,
 }
 
@@ -34,35 +36,7 @@ impl From<&Domain> for DomainView {
 
 impl std::fmt::Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[derive(tabled::Tabled)]
-        struct DomainProp {
-            #[tabled(rename = "Property")]
-            property: String,
-            #[tabled(rename = "Value")]
-            value: String,
-        }
-
-        let mut props = Vec::new();
-        props.push(DomainProp {
-            property: "Domain Name".to_string(),
-            value: self.name.clone(),
-        });
-        props.push(DomainProp {
-            property: "Domain Hash".to_string(),
-            value: self.hash.as_hex(),
-        });
-        if let Some(desc) = &self.description {
-            props.push(DomainProp {
-                property: "Description".to_string(),
-                value: desc.clone(),
-            });
-        }
-
-        let mut table = tabled::Table::new(props);
-        table.with(tabled::settings::Style::rounded());
-        table.with(tabled::settings::Panel::header("🖽  DOMAIN DETAILS"));
-
-        write!(f, "{}", table)
+        write!(f, "{}", crate::entity::render_tabled_card(self, "🖽  DOMAIN DETAILS"))
     }
 }
 
