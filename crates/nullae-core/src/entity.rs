@@ -13,7 +13,7 @@ use tabled::settings::object::Segment;
 use tabled::{
     Tabled,
     settings::{
-        Format, Style, Panel,
+        Format, Panel, Style,
         object::{Columns, Object, Rows},
     },
 };
@@ -286,6 +286,6 @@ pub fn render_tabled_card<T: Tabled>(item: &T, header_title: &str) -> String {
     let mut table = tabled::Table::new(props);
     table.with(Style::rounded());
     table.with(Panel::header(header_title.to_string()));
-    
+
     table.to_string()
 }

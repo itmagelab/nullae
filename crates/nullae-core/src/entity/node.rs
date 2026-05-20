@@ -111,7 +111,7 @@ impl NodeView {
                 std::net::IpAddr::V6(_) => 1,
             }
         });
-        
+
         let ips = if raw_ips.is_empty() {
             "—".to_string()
         } else if raw_ips.len() > 3 {
@@ -138,7 +138,10 @@ impl NodeView {
                         format!("{}GB Disk", total)
                     })
                     .unwrap_or_else(|| "—".to_string());
-                format!("{}c / {}GB RAM / {}", hw.cpu_cores, hw.total_memory_gb, storage)
+                format!(
+                    "{}c / {}GB RAM / {}",
+                    hw.cpu_cores, hw.total_memory_gb, storage
+                )
             })
             .unwrap_or_else(|| "—".to_string());
 
@@ -264,7 +267,8 @@ impl std::fmt::Display for Node {
 
             for interface in &network.interfaces {
                 let has_ips = !interface.ips.is_empty();
-                let has_real_mac = interface.mac.as_deref().unwrap_or("00:00:00:00:00:00") != "00:00:00:00:00:00"
+                let has_real_mac = interface.mac.as_deref().unwrap_or("00:00:00:00:00:00")
+                    != "00:00:00:00:00:00"
                     && interface.mac.as_deref().unwrap_or("") != "";
 
                 if has_ips || has_real_mac {
@@ -293,7 +297,9 @@ impl std::fmt::Display for Node {
             if !active_ifaces.is_empty() {
                 let mut net_table = tabled::Table::new(active_ifaces);
                 net_table.with(tabled::settings::Style::rounded());
-                net_table.with(tabled::settings::Panel::header("🖧  NETWORK INTERFACES (Active)"));
+                net_table.with(tabled::settings::Panel::header(
+                    "🖧  NETWORK INTERFACES (Active)",
+                ));
                 writeln!(f, "{}", net_table)?;
             }
 
@@ -610,7 +616,10 @@ mod tests {
     fn test_node_creation_empty_hostname() {
         let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
         let err = Node::new("   ", &domain_hash).unwrap_err();
-        assert_eq!(err.to_string(), "Node hostname cannot be empty or whitespace-only");
+        assert_eq!(
+            err.to_string(),
+            "Node hostname cannot be empty or whitespace-only"
+        );
     }
 
     #[test]
@@ -618,13 +627,17 @@ mod tests {
         let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
         let name = "a".repeat(256);
         let err = Node::new(name, &domain_hash).unwrap_err();
-        assert!(err.to_string().contains("Node hostname cannot exceed 255 characters"));
+        assert!(
+            err.to_string()
+                .contains("Node hostname cannot exceed 255 characters")
+        );
     }
 
     #[test]
     fn test_node_builder_methods() {
         let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
-        let mut node = Node::new("server-01", &domain_hash).unwrap()
+        let mut node = Node::new("server-01", &domain_hash)
+            .unwrap()
             .with_environment("staging")
             .with_tags(vec!["web".to_string(), "api".to_string()]);
         assert_eq!(node.environment.as_deref(), Some("staging"));
@@ -635,4 +648,3 @@ mod tests {
         assert!(node.last_seen.is_some());
     }
 }
-

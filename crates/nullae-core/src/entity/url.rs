@@ -35,7 +35,11 @@ impl From<&Url> for UrlView {
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", crate::entity::render_tabled_card(self, "🔗  URL DETAILS"))
+        write!(
+            f,
+            "{}",
+            crate::entity::render_tabled_card(self, "🔗  URL DETAILS")
+        )
     }
 }
 

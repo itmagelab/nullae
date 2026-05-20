@@ -171,4 +171,3 @@ mod tests {
         assert!(values.contains(&hash2));
     }
 }
-

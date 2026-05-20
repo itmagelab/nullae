@@ -34,7 +34,11 @@ impl From<&Ip> for IpView {
 
 impl std::fmt::Display for Ip {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", crate::entity::render_tabled_card(self, "🖧  IP ADDRESS DETAILS"))
+        write!(
+            f,
+            "{}",
+            crate::entity::render_tabled_card(self, "🖧  IP ADDRESS DETAILS")
+        )
     }
 }
 
@@ -122,7 +126,9 @@ mod tests {
     fn test_ip_creation_empty() {
         let parent = HashID::from_str(&"abc".hash()).unwrap();
         let err = Ip::new("  ", 24, &parent).unwrap_err();
-        assert_eq!(err.to_string(), "IP address cannot be empty or whitespace-only");
+        assert_eq!(
+            err.to_string(),
+            "IP address cannot be empty or whitespace-only"
+        );
     }
 }
-

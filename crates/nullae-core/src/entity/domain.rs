@@ -36,7 +36,11 @@ impl From<&Domain> for DomainView {
 
 impl std::fmt::Display for Domain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", crate::entity::render_tabled_card(self, "🖽  DOMAIN DETAILS"))
+        write!(
+            f,
+            "{}",
+            crate::entity::render_tabled_card(self, "🖽  DOMAIN DETAILS")
+        )
     }
 }
 
@@ -115,14 +119,19 @@ mod tests {
     #[test]
     fn test_domain_creation_empty_err() {
         let err = Domain::new("   ").unwrap_err();
-        assert_eq!(err.to_string(), "Domain name cannot be empty or whitespace-only");
+        assert_eq!(
+            err.to_string(),
+            "Domain name cannot be empty or whitespace-only"
+        );
     }
 
     #[test]
     fn test_domain_creation_too_long_err() {
         let name = "a".repeat(256);
         let err = Domain::new(name).unwrap_err();
-        assert!(err.to_string().contains("Domain name cannot exceed 255 characters"));
+        assert!(
+            err.to_string()
+                .contains("Domain name cannot exceed 255 characters")
+        );
     }
 }
-
