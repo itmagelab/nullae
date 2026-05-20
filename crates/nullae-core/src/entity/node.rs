@@ -86,6 +86,7 @@ pub struct NodeView {
     pub tags: String,
 }
 
+#[allow(dead_code)]
 impl NodeView {
     pub(crate) async fn try_from_node_async<S: Storage>(
         n: &Node,
@@ -582,6 +583,7 @@ impl Node {
             .unwrap_or_default()
     }
 
+    #[allow(dead_code)]
     fn tags(&self) -> String {
         self.tags.as_ref().map(|v| v.join(", ")).unwrap_or_default()
     }

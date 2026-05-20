@@ -203,27 +203,78 @@ impl Entity {
         }
     }
 
-    pub async fn view<S: Storage>(vec: Vec<Self>, ctx: &Context<S>) -> anyhow::Result<()> {
-        let mut nodes = Vec::new();
-        let mut domains = Vec::new();
-        let mut ips = Vec::new();
-        let mut urls = Vec::new();
-
-        for entity in vec {
-            match entity.kind {
-                EntityKind::Node { inner } => {
-                    nodes.push(NodeView::try_from_node_async(&inner, ctx).await?)
-                }
-                EntityKind::Domain { inner } => domains.push(DomainView::from(&*inner)),
-                EntityKind::Ip { inner } => ips.push(IpView::from(&*inner)),
-                EntityKind::Url { inner } => urls.push(UrlView::from(&*inner)),
-            }
+    pub async fn view<S: Storage>(vec: Vec<Self>, _ctx: &Context<S>) -> anyhow::Result<()> {
+        #[derive(tabled::Tabled)]
+        struct EntityRow {
+            #[tabled(rename = "Hash")]
+            hash: String,
+            #[tabled(rename = "Type")]
+            kind: String,
+            #[tabled(rename = "Name / Identifier")]
+            name: String,
+            #[tabled(rename = "Details")]
+            details: String,
         }
 
-        view(nodes, "Nodes");
-        view(domains, "Domains");
-        view(ips, "IPs");
-        view(urls, "Urls");
+        let mut rows = Vec::new();
+
+        for entity in vec {
+            let hash = entity.hash().to_string();
+            let kind = entity.type_name().to_string();
+            let (name, details) = match &entity.kind {
+                EntityKind::Node { inner } => {
+                    let hostname = inner.hostname.clone();
+                    let os = inner
+                        .os_info
+                        .as_ref()
+                        .map(|os| format!("{} ({})", os.os_type, os.arch))
+                        .unwrap_or_default();
+                    let env = inner.environment.clone().unwrap_or_default();
+                    let details = if !env.is_empty() && !os.is_empty() {
+                        format!("{} / {}", env, os)
+                    } else if !env.is_empty() {
+                        env
+                    } else {
+                        os
+                    };
+                    (hostname, details)
+                }
+                EntityKind::Domain { inner } => {
+                    let domain_name = inner.name.clone();
+                    let desc = inner.description.clone().unwrap_or_default();
+                    (domain_name, desc)
+                }
+                EntityKind::Ip { inner } => {
+                    let addr = format!("{}/{}", inner.address, inner.prefix);
+                    (addr, String::new())
+                }
+                EntityKind::Url { inner } => {
+                    let slug = inner.slug.clone();
+                    let target_url = inner.url.to_string();
+                    (slug, target_url)
+                }
+            };
+
+            let details = if details.trim().is_empty() {
+                "—".to_string()
+            } else {
+                details
+            };
+
+            rows.push(EntityRow {
+                hash,
+                kind,
+                name,
+                details,
+            });
+        }
+
+        rows.sort_by(|a, b| match a.kind.cmp(&b.kind) {
+            std::cmp::Ordering::Equal => a.name.cmp(&b.name),
+            other => other,
+        });
+
+        view(rows, "Discovered Entities");
         Ok(())
     }
 }
