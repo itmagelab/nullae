@@ -31,8 +31,29 @@ impl From<&Ip> for IpView {
 
 impl std::fmt::Display for Ip {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "IP ➤ {}", self.address)?;
-        writeln!(f, "  → Hash: {}", self.hash)
+        #[derive(tabled::Tabled)]
+        struct IpProp {
+            #[tabled(rename = "Property")]
+            property: String,
+            #[tabled(rename = "Value")]
+            value: String,
+        }
+
+        let mut props = Vec::new();
+        props.push(IpProp {
+            property: "IP Address".to_string(),
+            value: format!("{}/{}", self.address, self.prefix),
+        });
+        props.push(IpProp {
+            property: "IP Hash".to_string(),
+            value: self.hash.as_hex(),
+        });
+
+        let mut table = tabled::Table::new(props);
+        table.with(tabled::settings::Style::rounded());
+        table.with(tabled::settings::Panel::header("🖧  IP ADDRESS DETAILS"));
+
+        write!(f, "{}", table)
     }
 }
 

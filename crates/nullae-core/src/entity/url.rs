@@ -32,10 +32,39 @@ impl From<&Url> for UrlView {
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let desc = self.hash.short_hash();
-        writeln!(f, "Short Url ➤ {}", desc)?;
-        writeln!(f, "  → Url: {}", self.url)?;
-        writeln!(f, "  → Hash: {}", self.hash)
+        #[derive(tabled::Tabled)]
+        struct UrlProp {
+            #[tabled(rename = "Property")]
+            property: String,
+            #[tabled(rename = "Value")]
+            value: String,
+        }
+
+        let mut props = Vec::new();
+        props.push(UrlProp {
+            property: "Short Slug".to_string(),
+            value: self.slug.clone(),
+        });
+        props.push(UrlProp {
+            property: "Target URL".to_string(),
+            value: self.url.to_string(),
+        });
+        props.push(UrlProp {
+            property: "URL Hash".to_string(),
+            value: self.hash.as_hex(),
+        });
+        if let Ok(short) = self.short_url() {
+            props.push(UrlProp {
+                property: "Short URL".to_string(),
+                value: short,
+            });
+        }
+
+        let mut table = tabled::Table::new(props);
+        table.with(tabled::settings::Style::rounded());
+        table.with(tabled::settings::Panel::header("🔗  URL DETAILS"));
+
+        write!(f, "{}", table)
     }
 }
 
