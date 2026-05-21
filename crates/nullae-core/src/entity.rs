@@ -151,12 +151,42 @@ pub struct Entity {
 
 impl std::fmt::Display for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            EntityKind::Node { inner } => write!(f, "{}", inner),
-            EntityKind::Domain { inner } => write!(f, "{}", inner),
-            EntityKind::Ip { inner } => write!(f, "{}", inner),
-            EntityKind::Url { inner } => write!(f, "{}", inner),
+        let inner_str = match &self.kind {
+            EntityKind::Node { inner } => format!("{}", inner),
+            EntityKind::Domain { inner } => format!("{}", inner),
+            EntityKind::Ip { inner } => format!("{}", inner),
+            EntityKind::Url { inner } => format!("{}", inner),
+        };
+        write!(f, "{}", inner_str)?;
+
+        if let Some(attrs) = self.attributes() {
+            #[derive(tabled::Tabled)]
+            struct AttrRow {
+                #[tabled(rename = "Attribute")]
+                key: String,
+                #[tabled(rename = "Value")]
+                value: String,
+            }
+
+            let mut rows = Vec::new();
+            for (k, v) in attrs {
+                let val_str = if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else {
+                    serde_json::to_string(v).unwrap_or_default()
+                };
+                rows.push(AttrRow {
+                    key: k.clone(),
+                    value: val_str,
+                });
+            }
+
+            let mut table = tabled::Table::new(rows);
+            table.with(Style::rounded());
+            table.with(Panel::header("✨  ENTITY ATTRIBUTES"));
+            write!(f, "\n{}", table)?;
         }
+        Ok(())
     }
 }
 
@@ -262,9 +292,8 @@ impl Entity {
             let (name, details) = match &entity.kind {
                 EntityKind::Node { inner } => {
                     let hostname = inner.hostname.clone();
-                    let os = inner
-                        .os_info
-                        .as_ref()
+                    let os = entity.attr("os_info")
+                        .and_then(|v| serde_json::from_value::<node::OsInfo>(v.clone()).ok())
                         .map(|os| format!("{} ({})", os.os_type, os.arch))
                         .unwrap_or_default();
                     let env = inner.environment.clone().unwrap_or_default();

@@ -57,7 +57,6 @@ pub struct Node {
     pub(crate) hostname: String,
     pub(crate) domain: HashID,
     pub(crate) description: Option<String>,
-    pub(crate) os_info: Option<OsInfo>,
     pub(crate) hardware: Option<HardwareInfo>,
     pub(crate) network: Option<NetworkInfo>,
     pub(crate) created_at: Option<i64>,
@@ -121,11 +120,14 @@ impl NodeView {
             raw_ips.join(", ")
         };
 
-        let os = n
-            .os_info
-            .as_ref()
-            .map(|os| format!("{} ({})", os.os_type, os.arch))
-            .unwrap_or_else(|| "—".to_string());
+        let os = if let Some(entity) = ctx.storage().get(&n.hash.as_hex()).await? {
+            entity.attr("os_info")
+                .and_then(|v| serde_json::from_value::<OsInfo>(v.clone()).ok())
+                .map(|os| format!("{} ({})", os.os_type, os.arch))
+                .unwrap_or_else(|| "—".to_string())
+        } else {
+            "—".to_string()
+        };
 
         let specs = n
             .hardware
@@ -190,12 +192,7 @@ impl std::fmt::Display for Node {
             value: self.hash.as_hex(),
         });
 
-        if let Some(os_info) = &self.os_info {
-            props.push(NodeProperty {
-                property: "OS".to_string(),
-                value: format!("{} ({})", os_info.os_type, os_info.arch),
-            });
-        }
+
 
         if let Some(hardware) = &self.hardware {
             props.push(NodeProperty {
@@ -352,7 +349,12 @@ impl Node {
     }
 
     pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
-        let entity: Entity = self.into();
+        let mut entity: Entity = self.into();
+        let os_info = OsInfo {
+            os_type: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+        };
+        entity.set_attr("os_info".to_string(), serde_json::to_value(os_info)?);
 
         ctx.storage().save(&entity).await
     }
@@ -367,6 +369,12 @@ impl Node {
         for hash in children {
             entity.add_child(&hash.as_hex())?;
         }
+
+        let os_info = OsInfo {
+            os_type: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+        };
+        entity.set_attr("os_info".to_string(), serde_json::to_value(os_info)?);
 
         ctx.storage().save(&entity).await
     }
@@ -387,7 +395,14 @@ impl Node {
         domain_entity.add_child(&node.hash.as_hex())?;
         ctx.storage().save(&domain_entity).await?;
 
-        let created: Self = ctx.storage().create(&node.into()).await?.try_into()?;
+        let mut node_entity: Entity = node.into();
+        let os_info = OsInfo {
+            os_type: std::env::consts::OS.to_string(),
+            arch: std::env::consts::ARCH.to_string(),
+        };
+        node_entity.set_attr("os_info".to_string(), serde_json::to_value(os_info)?);
+
+        let created: Self = ctx.storage().create(&node_entity).await?.try_into()?;
 
         created.index()?.save(ctx).await?;
 
@@ -397,10 +412,7 @@ impl Node {
     pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<()> {
         use sysinfo::{Disks, Networks, System};
 
-        self.os_info = Some(OsInfo {
-            os_type: std::env::consts::OS.to_string(),
-            arch: std::env::consts::ARCH.to_string(),
-        });
+
 
         let mut sys = System::new_all();
         sys.refresh_all();
@@ -616,6 +628,18 @@ mod tests {
         let node = Node::create("app-server-01", &domain, &ctx).await.unwrap();
         assert_eq!(node.hostname, "app-server-01");
         assert_eq!(node.domain, domain.hash);
+
+        // Verify that OS info is properly stored in Entity's metadata attributes
+        let node_entity = ctx
+            .storage()
+            .get(&node.hash.as_hex())
+            .await
+            .unwrap()
+            .unwrap();
+        let os_val = node_entity.attr("os_info").expect("os_info attribute exists");
+        let os_info: OsInfo = serde_json::from_value(os_val.clone()).expect("Deserializes into OsInfo");
+        assert_eq!(os_info.os_type, std::env::consts::OS);
+        assert_eq!(os_info.arch, std::env::consts::ARCH);
 
         // 3. Verify Domain has Node in its children
         let domain_entity = ctx
