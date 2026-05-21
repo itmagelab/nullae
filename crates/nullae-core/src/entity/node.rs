@@ -618,7 +618,12 @@ mod tests {
         assert_eq!(node.domain, domain.hash);
 
         // 3. Verify Domain has Node in its children
-        let domain_entity = ctx.storage().get(&domain.hash.as_hex()).await.unwrap().unwrap();
+        let domain_entity = ctx
+            .storage()
+            .get(&domain.hash.as_hex())
+            .await
+            .unwrap()
+            .unwrap();
         assert!(domain_entity.has_children());
 
         // 4. Find the Node by hostname and partial hash
@@ -635,7 +640,12 @@ mod tests {
         let fetched_node_after_delete = ctx.storage().get(&node_hash.as_hex()).await.unwrap();
         assert!(fetched_node_after_delete.is_none());
 
-        let domain_entity_after = ctx.storage().get(&domain.hash.as_hex()).await.unwrap().unwrap();
+        let domain_entity_after = ctx
+            .storage()
+            .get(&domain.hash.as_hex())
+            .await
+            .unwrap()
+            .unwrap();
         assert!(!domain_entity_after.has_children());
     }
 }

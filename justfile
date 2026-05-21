@@ -34,7 +34,7 @@ sandbox action="help":
         done; \
     elif [ "{{action}}" = "list" ]; then \
         printf "📋 Querying unified registry from node1...\n"; \
-        docker compose -f compose.sandbox.yaml exec node1 /bin/0ae list; \
+        docker compose -f compose.sandbox.yaml exec node1 /bin/0ae list -k node; \
     else \
         printf "\033[1;31m❌ Unknown action: %s\033[0m\n" "{{action}}"; \
         printf "Run 'just sandbox' to see the list of available actions.\n"; \

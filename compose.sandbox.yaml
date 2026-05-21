@@ -10,7 +10,7 @@ services:
       NULLAE_CONSUL_URL: http://caddy:8500
       NULLAE_ENVIRONMENT: sandbox
       NULLAE_TAGS: sandbox,node1
-      RUST_LOG: debug
+      # RUST_LOG: debug
     restart: unless-stopped
 
   node2:
@@ -23,7 +23,7 @@ services:
       NULLAE_CONSUL_URL: http://caddy:8500
       NULLAE_ENVIRONMENT: sandbox
       NULLAE_TAGS: sandbox,node2,database
-      RUST_LOG: debug
+      # RUST_LOG: debug
     restart: unless-stopped
 
   node3:
@@ -36,7 +36,7 @@ services:
       NULLAE_CONSUL_URL: http://caddy:8500
       NULLAE_ENVIRONMENT: sandbox
       NULLAE_TAGS: sandbox,node3,worker
-      RUST_LOG: debug
+      # RUST_LOG: debug
     restart: unless-stopped
 
 networks:

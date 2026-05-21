@@ -46,9 +46,14 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-pub async fn list() -> Result<(), anyhow::Error> {
+pub async fn list(kind: Option<String>) -> Result<(), anyhow::Error> {
     let ctx = Context::new()?;
-    let entities = ctx.storage().list().await?;
+    let mut entities = ctx.storage().list().await?;
+
+    if let Some(k) = kind {
+        let k_lower = k.to_lowercase();
+        entities.retain(|e| e.type_name().to_lowercase() == k_lower);
+    }
 
     Entity::view(entities, &ctx).await?;
 

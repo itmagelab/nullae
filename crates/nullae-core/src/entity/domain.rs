@@ -125,7 +125,10 @@ mod tests {
         let mut domain_to_update = domain.clone();
         domain_to_update.description = Some("Local development domain".to_string());
         let updated = domain_to_update.save(&ctx).await.unwrap();
-        assert_eq!(updated.description, Some("Local development domain".to_string()));
+        assert_eq!(
+            updated.description,
+            Some("Local development domain".to_string())
+        );
 
         // 4. Find the domain by name index
         let found = ctx.storage().find("local").await.unwrap();

@@ -19,7 +19,10 @@ Some description
 )]
 pub(crate) enum Commands {
     Discovery,
-    List,
+    List {
+        #[arg(long, short)]
+        kind: Option<String>,
+    },
     Delete {
         #[arg(long, short)]
         pattern: String,
@@ -58,7 +61,7 @@ pub async fn main() {
 
     let result = match args.command {
         Some(Commands::Discovery) => handler::discovery().await,
-        Some(Commands::List) => handler::list().await,
+        Some(Commands::List { kind }) => handler::list(kind).await,
         Some(Commands::Delete { pattern }) => handler::delete(pattern).await,
         Some(Commands::Show { pattern }) => handler::show(pattern).await,
         None => Ok(()),
