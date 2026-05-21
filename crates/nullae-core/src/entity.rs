@@ -94,8 +94,6 @@ pub struct Metadata {
     created_at: chrono::NaiveDateTime,
     updated_at: Option<chrono::NaiveDateTime>,
     children: Option<Vec<HashID>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub attributes: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 impl Metadata {
@@ -110,25 +108,6 @@ impl Metadata {
     pub fn update(&mut self) {
         let updated_at = chrono::Local::now().naive_local();
         self.updated_at = Some(updated_at);
-    }
-
-    pub fn get_attr(&self, key: &str) -> Option<&serde_json::Value> {
-        self.attributes.as_ref()?.get(key)
-    }
-
-    pub fn set_attr(&mut self, key: String, value: serde_json::Value) {
-        let attrs = self.attributes.get_or_insert_with(std::collections::BTreeMap::new);
-        attrs.insert(key, value);
-    }
-
-    pub fn remove_attr(&mut self, key: &str) -> Option<serde_json::Value> {
-        let val = self.attributes.as_mut()?.remove(key);
-        if let Some(attrs) = &self.attributes {
-            if attrs.is_empty() {
-                self.attributes = None;
-            }
-        }
-        val
     }
 }
 
@@ -213,22 +192,44 @@ impl Entity {
     }
 
     pub fn attr(&self, key: &str) -> Option<&serde_json::Value> {
-        self.metadata.get_attr(key)
+        self.attributes()?.get(key)
     }
 
     pub fn set_attr(&mut self, key: String, value: serde_json::Value) {
-        self.metadata.set_attr(key, value);
+        let attrs = match &mut self.kind {
+            EntityKind::Node { inner } => &mut inner.attributes,
+            EntityKind::Domain { inner } => &mut inner.attributes,
+            EntityKind::Ip { inner } => &mut inner.attributes,
+            EntityKind::Url { inner } => &mut inner.attributes,
+        };
+        let map = attrs.get_or_insert_with(std::collections::BTreeMap::new);
+        map.insert(key, value);
         self.metadata.update();
     }
 
     pub fn remove_attr(&mut self, key: &str) -> Option<serde_json::Value> {
-        let val = self.metadata.remove_attr(key);
+        let attrs = match &mut self.kind {
+            EntityKind::Node { inner } => &mut inner.attributes,
+            EntityKind::Domain { inner } => &mut inner.attributes,
+            EntityKind::Ip { inner } => &mut inner.attributes,
+            EntityKind::Url { inner } => &mut inner.attributes,
+        };
+        let map = attrs.as_mut()?;
+        let val = map.remove(key);
+        if map.is_empty() {
+            *attrs = None;
+        }
         self.metadata.update();
         val
     }
 
     pub fn attributes(&self) -> Option<&std::collections::BTreeMap<String, serde_json::Value>> {
-        self.metadata.attributes.as_ref()
+        match &self.kind {
+            EntityKind::Node { inner } => inner.attributes.as_ref(),
+            EntityKind::Domain { inner } => inner.attributes.as_ref(),
+            EntityKind::Ip { inner } => inner.attributes.as_ref(),
+            EntityKind::Url { inner } => inner.attributes.as_ref(),
+        }
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
@@ -292,7 +293,8 @@ impl Entity {
             let (name, details) = match &entity.kind {
                 EntityKind::Node { inner } => {
                     let hostname = inner.hostname.clone();
-                    let os = entity.attr("os_info")
+                    let os = entity
+                        .attr("os_info")
                         .and_then(|v| serde_json::from_value::<node::OsInfo>(v.clone()).ok())
                         .map(|os| format!("{} ({})", os.os_type, os.arch))
                         .unwrap_or_default();

@@ -14,6 +14,9 @@ pub struct Ip {
     pub(crate) address: String,
     #[tabled(rename = "Prefix")]
     pub prefix: u8,
+    #[tabled(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) attributes: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]
@@ -63,6 +66,7 @@ impl Ip {
             hash,
             address,
             prefix,
+            ..Default::default()
         })
     }
 

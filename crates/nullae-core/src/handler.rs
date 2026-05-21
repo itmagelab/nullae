@@ -7,7 +7,7 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
     let mut node = Node::from_current_host(&ctx).await?;
 
     // Collect host information
-    let hardware = node.collect_host_info(&ctx).await?;
+    node.collect_host_info(&ctx).await?;
 
     // Read environment from env var (optional)
     if let Ok(env) = std::env::var("NULLAE_ENVIRONMENT") {
@@ -34,7 +34,7 @@ pub async fn discovery() -> Result<(), anyhow::Error> {
         }
     }
 
-    let entity = node.save_with_children(children, Some(hardware), &ctx).await?;
+    let entity = node.save_with_children(children, &ctx).await?;
 
     let node: Node = entity.try_into()?;
     node.index()?.save(&ctx).await?;

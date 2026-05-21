@@ -15,6 +15,9 @@ pub struct Domain {
     pub(crate) name: String,
     #[tabled(rename = "Description", display("display::option", ""))]
     pub(crate) description: Option<String>,
+    #[tabled(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) attributes: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]

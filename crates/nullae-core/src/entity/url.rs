@@ -14,6 +14,9 @@ pub struct Url {
     pub(crate) slug: String,
     #[tabled(rename = "Target URL")]
     pub(crate) url: url::Url,
+    #[tabled(skip)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) attributes: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Tabled)]
@@ -59,6 +62,7 @@ impl Url {
             hash,
             slug,
             url: parsed_url,
+            attributes: None,
         })
     }
 
