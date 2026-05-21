@@ -1,0 +1,45 @@
+---
+services:
+  node1:
+    build:
+      context: .
+      target: final
+    hostname: node1.sandbox
+    command: tail -f /dev/null
+    environment:
+      NULLAE_CONSUL_URL: http://caddy:8500
+      NULLAE_ENVIRONMENT: sandbox
+      NULLAE_TAGS: sandbox,node1
+      RUST_LOG: debug
+    restart: unless-stopped
+
+  node2:
+    build:
+      context: .
+      target: final
+    hostname: node2.sandbox
+    command: tail -f /dev/null
+    environment:
+      NULLAE_CONSUL_URL: http://caddy:8500
+      NULLAE_ENVIRONMENT: sandbox
+      NULLAE_TAGS: sandbox,node2,database
+      RUST_LOG: debug
+    restart: unless-stopped
+
+  node3:
+    build:
+      context: .
+      target: final
+    hostname: node3.sandbox
+    command: tail -f /dev/null
+    environment:
+      NULLAE_CONSUL_URL: http://caddy:8500
+      NULLAE_ENVIRONMENT: sandbox
+      NULLAE_TAGS: sandbox,node3,worker
+      RUST_LOG: debug
+    restart: unless-stopped
+
+networks:
+  default:
+    name: nullae_default
+    external: true
