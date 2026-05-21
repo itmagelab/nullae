@@ -57,7 +57,6 @@ pub struct Node {
     pub(crate) hostname: String,
     pub(crate) domain: HashID,
     pub(crate) description: Option<String>,
-    pub(crate) hardware: Option<HardwareInfo>,
     pub(crate) network: Option<NetworkInfo>,
     pub(crate) created_at: Option<i64>,
     pub(crate) last_seen: Option<i64>,
@@ -129,24 +128,27 @@ impl NodeView {
             "—".to_string()
         };
 
-        let specs = n
-            .hardware
-            .as_ref()
-            .map(|hw| {
-                let storage = hw
-                    .storage
-                    .as_ref()
-                    .map(|s| {
-                        let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
-                        format!("{}GB Disk", total)
-                    })
-                    .unwrap_or_else(|| "—".to_string());
-                format!(
-                    "{}c / {}GB RAM / {}",
-                    hw.cpu_cores, hw.total_memory_gb, storage
-                )
-            })
-            .unwrap_or_else(|| "—".to_string());
+        let specs = if let Some(entity) = ctx.storage().get(&n.hash.as_hex()).await? {
+            entity.attr("hardware")
+                .and_then(|v| serde_json::from_value::<HardwareInfo>(v.clone()).ok())
+                .map(|hw| {
+                    let storage = hw
+                        .storage
+                        .as_ref()
+                        .map(|s| {
+                            let total = s.iter().map(|d| d.size).sum::<u64>() / 1024 / 1024 / 1024;
+                            format!("{}GB Disk", total)
+                        })
+                        .unwrap_or_else(|| "—".to_string());
+                    format!(
+                        "{}c / {}GB RAM / {}",
+                        hw.cpu_cores, hw.total_memory_gb, storage
+                    )
+                })
+                .unwrap_or_else(|| "—".to_string())
+        } else {
+            "—".to_string()
+        };
 
         let tags = n.tags();
         let tags = if tags.is_empty() {
@@ -194,29 +196,7 @@ impl std::fmt::Display for Node {
 
 
 
-        if let Some(hardware) = &self.hardware {
-            props.push(NodeProperty {
-                property: "CPU".to_string(),
-                value: format!("{} ({} cores)", hardware.cpu_model, hardware.cpu_cores),
-            });
-            props.push(NodeProperty {
-                property: "RAM".to_string(),
-                value: format!("{} GB RAM", hardware.total_memory_gb),
-            });
 
-            if let Some(storage) = &hardware.storage {
-                for disk in storage {
-                    props.push(NodeProperty {
-                        property: "Storage".to_string(),
-                        value: format!(
-                            "{} ({:.1} GB)",
-                            disk.model,
-                            disk.size as f64 / 1024.0 / 1024.0 / 1024.0
-                        ),
-                    });
-                }
-            }
-        }
 
         if let Some(env) = &self.environment {
             props.push(NodeProperty {
@@ -348,7 +328,11 @@ impl Node {
         Self::create(&hostname, &domain, ctx).await
     }
 
-    pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Entity> {
+    pub async fn save<S: Storage>(
+        self,
+        hardware: Option<HardwareInfo>,
+        ctx: &Context<S>,
+    ) -> anyhow::Result<Entity> {
         let mut entity: Entity = self.into();
         let os_info = OsInfo {
             os_type: std::env::consts::OS.to_string(),
@@ -356,12 +340,17 @@ impl Node {
         };
         entity.set_attr("os_info".to_string(), serde_json::to_value(os_info)?);
 
+        if let Some(hw) = hardware {
+            entity.set_attr("hardware".to_string(), serde_json::to_value(hw)?);
+        }
+
         ctx.storage().save(&entity).await
     }
 
     pub async fn save_with_children<S: Storage>(
         self,
         children: Vec<HashID>,
+        hardware: Option<HardwareInfo>,
         ctx: &Context<S>,
     ) -> anyhow::Result<Entity> {
         let mut entity: Entity = self.into();
@@ -375,6 +364,10 @@ impl Node {
             arch: std::env::consts::ARCH.to_string(),
         };
         entity.set_attr("os_info".to_string(), serde_json::to_value(os_info)?);
+
+        if let Some(hw) = hardware {
+            entity.set_attr("hardware".to_string(), serde_json::to_value(hw)?);
+        }
 
         ctx.storage().save(&entity).await
     }
@@ -409,7 +402,7 @@ impl Node {
         Ok(created)
     }
 
-    pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<()> {
+    pub async fn collect_host_info<S: Storage>(&mut self, ctx: &Context<S>) -> anyhow::Result<HardwareInfo> {
         use sysinfo::{Disks, Networks, System};
 
 
@@ -454,7 +447,7 @@ impl Node {
 
         self.network = Some(NetworkInfo { interfaces });
 
-        self.hardware = Some(HardwareInfo {
+        let hardware = HardwareInfo {
             cpu_model: sys
                 .cpus()
                 .first()
@@ -464,7 +457,7 @@ impl Node {
             total_memory_gb: sys.total_memory() / 1024 / 1024 / 1024,
             memory_modules: None, // Not supported by sysinfo automatically
             storage: Some(storage),
-        });
+        };
 
         let now = chrono::Utc::now().timestamp();
         if self.created_at.is_none() {
@@ -472,7 +465,7 @@ impl Node {
         }
         self.last_seen = Some(now);
 
-        Ok(())
+        Ok(hardware)
     }
 
     pub fn heartbeat(&mut self) {
@@ -640,6 +633,16 @@ mod tests {
         let os_info: OsInfo = serde_json::from_value(os_val.clone()).expect("Deserializes into OsInfo");
         assert_eq!(os_info.os_type, std::env::consts::OS);
         assert_eq!(os_info.arch, std::env::consts::ARCH);
+
+        // Verify that we can collect and save host specs as attributes
+        let mut local_node = Node::from_current_host(&ctx).await.unwrap();
+        let hw_info = local_node.collect_host_info(&ctx).await.unwrap();
+        let saved_local = local_node.save_with_children(vec![], Some(hw_info), &ctx).await.unwrap();
+        
+        let loaded_local = ctx.storage().get(&saved_local.hash().as_hex()).await.unwrap().unwrap();
+        let loaded_hw: HardwareInfo = serde_json::from_value(loaded_local.attr("hardware").unwrap().clone()).expect("Deserializes into HardwareInfo");
+        assert!(!loaded_hw.cpu_model.is_empty());
+        assert!(loaded_hw.cpu_cores > 0);
 
         // 3. Verify Domain has Node in its children
         let domain_entity = ctx
