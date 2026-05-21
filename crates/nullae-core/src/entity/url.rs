@@ -88,16 +88,30 @@ impl Url {
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use super::*;
 
     #[tokio::test]
-    async fn it_works() {
-        dotenvy::dotenv().ok();
+    async fn test_url_lifecycle_in_storage() {
+        let storage = InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
 
-        let ctx = Context::new().unwrap();
-        let url = Url::create("https://ya.ru/some?param=1", &ctx)
-            .await
-            .unwrap();
+        // 1. Create URL entity in storage
+        let target = "https://example.com/search?q=rust";
+        let url = Url::create(target, &ctx).await.unwrap();
+        assert_eq!(url.url.as_str(), "https://example.com/search?q=rust");
+
+        // 2. Fetch the URL from storage using slug
+        let found = ctx.storage().find(&url.slug).await.unwrap();
+        assert!(!found.is_empty());
+        assert_eq!(found[0].hash(), &url.hash);
+
+        let url_hash = url.hash.clone();
+
+        // 3. Delete URL entity
         url.delete(&ctx).await.unwrap();
+
+        // 4. Verify it's gone
+        let fetched_after_delete = ctx.storage().get(&url_hash.as_hex()).await.unwrap();
+        assert!(fetched_after_delete.is_none());
     }
 }

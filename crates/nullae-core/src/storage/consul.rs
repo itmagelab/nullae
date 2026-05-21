@@ -136,13 +136,13 @@ impl Storage for Consul {
     }
 
     async fn get_index(&self, path: &str) -> anyhow::Result<Option<Item>> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let url = self.build_url(path);
         let rs = self.pool.get(&url).send().await?;
-
+ 
         if !rs.status().is_success() {
             return Ok(None);
         }
-
+ 
         let mut records: Vec<Record> = rs.json().await?;
         if let Some(record) = records.pop() {
             let item: Item = serde_json::from_value(record.value()?)?;
@@ -151,23 +151,23 @@ impl Storage for Consul {
             Ok(None)
         }
     }
-
+ 
     async fn save_index(&self, path: &str, item: &Item) -> anyhow::Result<()> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let url = self.build_url(path);
         let payload = item.payload()?;
         self.pool.put(&url).json(&payload).send().await?;
         Ok(())
     }
-
+ 
     async fn purge_index(&self, entity: &Entity) -> anyhow::Result<()> {
         let index = Index::from_entity(entity)?;
         for new_item in index.value() {
             let Some(mut saved) = self.get_index(&new_item.path()).await? else {
                 continue;
             };
-
+ 
             saved.subtract(new_item);
-
+ 
             if saved.is_empty() {
                 self.delete_index(&saved.path()).await?;
             } else {
@@ -176,9 +176,9 @@ impl Storage for Consul {
         }
         Ok(())
     }
-
+ 
     async fn delete_index(&self, path: &str) -> anyhow::Result<()> {
-        let url = self.build_url(&format!("{BASE_PATH}/index/{}", path));
+        let url = self.build_url(path);
         self.pool.delete(&url).send().await?;
         Ok(())
     }

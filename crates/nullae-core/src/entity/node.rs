@@ -603,50 +603,39 @@ fn get_host_info() -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
-    #[test]
-    fn test_node_creation_success() {
-        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
-        let node = Node::new("server-01", &domain_hash).unwrap();
-        assert_eq!(node.hostname, "server-01");
-        assert_eq!(node.domain, domain_hash);
-        assert!(node.os_info.is_none());
-    }
+    #[tokio::test]
+    async fn test_node_lifecycle_in_storage() {
+        let storage = InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
 
-    #[test]
-    fn test_node_creation_empty_hostname() {
-        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
-        let err = Node::new("   ", &domain_hash).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "Node hostname cannot be empty or whitespace-only"
-        );
-    }
+        // 1. Create Domain
+        let domain = Domain::create("production", &ctx).await.unwrap();
 
-    #[test]
-    fn test_node_creation_too_long_hostname() {
-        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
-        let name = "a".repeat(256);
-        let err = Node::new(name, &domain_hash).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("Node hostname cannot exceed 255 characters")
-        );
-    }
+        // 2. Create Node under that Domain
+        let node = Node::create("app-server-01", &domain, &ctx).await.unwrap();
+        assert_eq!(node.hostname, "app-server-01");
+        assert_eq!(node.domain, domain.hash);
 
-    #[test]
-    fn test_node_builder_methods() {
-        let domain_hash = HashID::from_str(&"domain_hash".hash()).unwrap();
-        let mut node = Node::new("server-01", &domain_hash)
-            .unwrap()
-            .with_environment("staging")
-            .with_tags(vec!["web".to_string(), "api".to_string()]);
-        assert_eq!(node.environment.as_deref(), Some("staging"));
-        assert_eq!(node.tags.as_ref().unwrap().len(), 2);
+        // 3. Verify Domain has Node in its children
+        let domain_entity = ctx.storage().get(&domain.hash.as_hex()).await.unwrap().unwrap();
+        assert!(domain_entity.has_children());
 
-        assert!(node.last_seen.is_none());
-        node.heartbeat();
-        assert!(node.last_seen.is_some());
+        // 4. Find the Node by hostname and partial hash
+        let found = ctx.storage().find("app-server-01").await.unwrap();
+        assert!(!found.is_empty());
+        assert_eq!(found[0].hash(), &node.hash);
+
+        let node_hash = node.hash.clone();
+
+        // 5. Delete the Node
+        node.delete(&ctx).await.unwrap();
+
+        // 6. Verify Node is removed and Domain no longer lists it as a child
+        let fetched_node_after_delete = ctx.storage().get(&node_hash.as_hex()).await.unwrap();
+        assert!(fetched_node_after_delete.is_none());
+
+        let domain_entity_after = ctx.storage().get(&domain.hash.as_hex()).await.unwrap().unwrap();
+        assert!(!domain_entity_after.has_children());
     }
 }

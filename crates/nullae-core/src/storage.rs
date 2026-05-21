@@ -1,4 +1,5 @@
 pub mod consul;
+pub mod memory;
 
 use crate::prelude::*;
 use std::future::Future;

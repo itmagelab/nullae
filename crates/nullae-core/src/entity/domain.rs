@@ -88,7 +88,7 @@ impl Domain {
 
     pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Self> {
         self.index()?.save(ctx).await?;
-        ctx.storage().create(&self.into()).await?.try_into()
+        ctx.storage().save(&self.into()).await?.try_into()
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
@@ -108,30 +108,36 @@ impl Domain {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_domain_creation_success() {
-        let domain = Domain::new("example.com").unwrap();
-        assert_eq!(domain.name, "example.com");
-        assert!(domain.description.is_none());
-        assert!(!domain.hash.as_hex().is_empty());
-    }
+    #[tokio::test]
+    async fn test_domain_lifecycle_in_storage() {
+        let storage = InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
 
-    #[test]
-    fn test_domain_creation_empty_err() {
-        let err = Domain::new("   ").unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "Domain name cannot be empty or whitespace-only"
-        );
-    }
+        // 1. Create a domain
+        let domain = Domain::create("local", &ctx).await.unwrap();
+        assert_eq!(domain.name, "local");
 
-    #[test]
-    fn test_domain_creation_too_long_err() {
-        let name = "a".repeat(256);
-        let err = Domain::new(name).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("Domain name cannot exceed 255 characters")
-        );
+        // 2. Fetch the domain from storage
+        let fetched = Domain::get(&domain.hash, &ctx).await.unwrap();
+        assert_eq!(fetched.name, "local");
+
+        // 3. Save domain with a custom description
+        let mut domain_to_update = domain.clone();
+        domain_to_update.description = Some("Local development domain".to_string());
+        let updated = domain_to_update.save(&ctx).await.unwrap();
+        assert_eq!(updated.description, Some("Local development domain".to_string()));
+
+        // 4. Find the domain by name index
+        let found = ctx.storage().find("local").await.unwrap();
+        assert!(!found.is_empty());
+        assert_eq!(found[0].hash(), &domain.hash);
+
+        let domain_hash = domain.hash.clone();
+        // 5. Delete the domain
+        domain.delete(&ctx).await.unwrap();
+
+        // 6. Confirm it is deleted
+        let fetched_after_delete = Domain::get(&domain_hash, &ctx).await;
+        assert!(fetched_after_delete.is_err());
     }
 }

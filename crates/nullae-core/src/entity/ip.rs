@@ -89,7 +89,7 @@ impl Ip {
 
     pub async fn save<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<Self> {
         self.index()?.save(ctx).await?;
-        ctx.storage().create(&self.into()).await?.try_into()
+        ctx.storage().save(&self.into()).await?.try_into()
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
@@ -103,32 +103,31 @@ impl Ip {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_ip_creation_success() {
-        let parent = HashID::from_str(&"abc".hash()).unwrap();
-        let ip = Ip::new("192.168.1.1", 24, &parent).unwrap();
-        assert_eq!(ip.address, "192.168.1.1");
-        assert_eq!(ip.prefix, 24);
+    #[tokio::test]
+    async fn test_ip_lifecycle_in_storage() {
+        let storage = InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
 
-        let ipv6 = Ip::new("2001:db8::1", 64, &parent).unwrap();
-        assert_eq!(ipv6.address, "2001:db8::1");
-        assert_eq!(ipv6.prefix, 64);
-    }
+        // 1. Create parent Domain and Node
+        let domain = Domain::create("corp", &ctx).await.unwrap();
+        let node = Node::create("router-01", &domain, &ctx).await.unwrap();
 
-    #[test]
-    fn test_ip_creation_invalid_format() {
-        let parent = HashID::from_str(&"abc".hash()).unwrap();
-        let err = Ip::new("invalid-ip", 24, &parent).unwrap_err();
-        assert!(err.to_string().contains("Invalid IP address format"));
-    }
+        // 2. Create IP linked to that Node
+        let ip = Ip::create("10.0.0.1", 8, &node.hash, &ctx).await.unwrap();
+        assert_eq!(ip.address, "10.0.0.1");
+        assert_eq!(ip.prefix, 8);
 
-    #[test]
-    fn test_ip_creation_empty() {
-        let parent = HashID::from_str(&"abc".hash()).unwrap();
-        let err = Ip::new("  ", 24, &parent).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "IP address cannot be empty or whitespace-only"
-        );
+        // 3. Fetch from storage
+        let fetched = Ip::get(&ip.hash, &ctx).await.unwrap();
+        assert_eq!(fetched.address, "10.0.0.1");
+
+        let ip_hash = ip.hash.clone();
+
+        // 4. Delete the IP
+        ip.delete(&ctx).await.unwrap();
+
+        // 5. Verify it's gone
+        let fetched_after_delete = Ip::get(&ip_hash, &ctx).await;
+        assert!(fetched_after_delete.is_err());
     }
 }

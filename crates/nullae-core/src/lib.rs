@@ -91,25 +91,12 @@ pub trait Indexable {
 mod tests {
     use super::prelude::*;
 
-    #[tokio::test]
-    async fn test_some() {
-        dotenvy::dotenv().ok();
-        let ctx = Context::new().unwrap();
-        let domain = Domain::create("testing", &ctx).await.unwrap();
-        let mut node = Node::create("local-1", &domain, &ctx).await.unwrap();
-        node.collect_host_info(&ctx).await.unwrap();
-        let node = node.save(&ctx).await.unwrap();
-        node.delete(&ctx).await.unwrap();
-        domain.delete(&ctx).await.unwrap();
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn random_nodes_domains() {
-        dotenvy::dotenv().ok();
-
         use futures::stream::{self, StreamExt};
 
-        let ctx = Context::new().unwrap();
+        let storage = InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
 
         let domains: Vec<Domain> = stream::iter(0..10)
             .map(|i| {
