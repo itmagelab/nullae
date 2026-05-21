@@ -94,6 +94,8 @@ pub struct Metadata {
     created_at: chrono::NaiveDateTime,
     updated_at: Option<chrono::NaiveDateTime>,
     children: Option<Vec<HashID>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<std::collections::BTreeMap<String, serde_json::Value>>,
 }
 
 impl Metadata {
@@ -105,11 +107,28 @@ impl Metadata {
         }
     }
 
-    pub fn update(mut self) -> Self {
+    pub fn update(&mut self) {
         let updated_at = chrono::Local::now().naive_local();
         self.updated_at = Some(updated_at);
+    }
 
-        self
+    pub fn get_attr(&self, key: &str) -> Option<&serde_json::Value> {
+        self.attributes.as_ref()?.get(key)
+    }
+
+    pub fn set_attr(&mut self, key: String, value: serde_json::Value) {
+        let attrs = self.attributes.get_or_insert_with(std::collections::BTreeMap::new);
+        attrs.insert(key, value);
+    }
+
+    pub fn remove_attr(&mut self, key: &str) -> Option<serde_json::Value> {
+        let val = self.attributes.as_mut()?.remove(key);
+        if let Some(attrs) = &self.attributes {
+            if attrs.is_empty() {
+                self.attributes = None;
+            }
+        }
+        val
     }
 }
 
@@ -161,6 +180,25 @@ impl Entity {
 
     pub fn has_children(&self) -> bool {
         self.metadata.children.is_some()
+    }
+
+    pub fn attr(&self, key: &str) -> Option<&serde_json::Value> {
+        self.metadata.get_attr(key)
+    }
+
+    pub fn set_attr(&mut self, key: String, value: serde_json::Value) {
+        self.metadata.set_attr(key, value);
+        self.metadata.update();
+    }
+
+    pub fn remove_attr(&mut self, key: &str) -> Option<serde_json::Value> {
+        let val = self.metadata.remove_attr(key);
+        self.metadata.update();
+        val
+    }
+
+    pub fn attributes(&self) -> Option<&std::collections::BTreeMap<String, serde_json::Value>> {
+        self.metadata.attributes.as_ref()
     }
 
     pub async fn delete<S: Storage>(self, ctx: &Context<S>) -> anyhow::Result<()> {
@@ -339,4 +377,85 @@ pub fn render_tabled_card<T: Tabled>(item: &T, header_title: &str) -> String {
     table.with(Panel::header(header_title));
 
     table.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_entity_attributes_lifecycle() {
+        let storage = crate::storage::memory::InMemoryStorage::new();
+        let ctx = Context::with_storage(storage);
+
+        // 1. Create a Domain entity
+        let domain = domain::Domain::create("production", &ctx).await.unwrap();
+        let mut entity: Entity = domain.into();
+
+        // 2. Set different types of attributes
+        entity.set_attr("env".to_string(), json!("prod"));
+        entity.set_attr("priority".to_string(), json!(1));
+        entity.set_attr("active".to_string(), json!(true));
+        entity.set_attr("tags".to_string(), json!(["k8s", "web"]));
+        entity.set_attr("nested".to_string(), json!({ "foo": "bar" }));
+
+        // 3. Retrieve and assert attributes
+        assert_eq!(entity.attr("env").unwrap(), &json!("prod"));
+        assert_eq!(entity.attr("priority").unwrap(), &json!(1));
+        assert_eq!(entity.attr("active").unwrap(), &json!(true));
+        assert_eq!(entity.attr("tags").unwrap(), &json!(["k8s", "web"]));
+        assert_eq!(entity.attr("nested").unwrap(), &json!({ "foo": "bar" }));
+
+        // Verify BTreeMap key ordering and listing
+        let attrs = entity.attributes().unwrap();
+        let keys: Vec<&String> = attrs.keys().collect();
+        assert_eq!(keys, vec!["active", "env", "nested", "priority", "tags"]);
+
+        // 4. Save entity with attributes to storage
+        let saved_entity = ctx.storage().save(&entity).await.unwrap();
+
+        // 5. Get from storage and verify attributes are persisted and match
+        let retrieved = ctx
+            .storage()
+            .get(&saved_entity.hash().as_hex())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.attr("env").unwrap(), &json!("prod"));
+        assert_eq!(retrieved.attr("priority").unwrap(), &json!(1));
+        assert_eq!(retrieved.attr("active").unwrap(), &json!(true));
+
+        // 6. Modify attributes and save again
+        let mut retrieved_mut = retrieved;
+        retrieved_mut.set_attr("env".to_string(), json!("staging"));
+        let removed = retrieved_mut.remove_attr("priority");
+        assert_eq!(removed.unwrap(), json!(1));
+
+        let saved_updated = ctx.storage().save(&retrieved_mut).await.unwrap();
+
+        // 7. Verify modifications are stored
+        let final_retrieved = ctx
+            .storage()
+            .get(&saved_updated.hash().as_hex())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(final_retrieved.attr("env").unwrap(), &json!("staging"));
+        assert!(final_retrieved.attr("priority").is_none());
+        assert_eq!(final_retrieved.attr("active").unwrap(), &json!(true));
+
+        // Verify remove_attr cleans up attributes option when empty
+        assert!(final_retrieved.attr("active").is_some());
+        let mut final_mut = final_retrieved;
+        final_mut.remove_attr("active");
+        final_mut.remove_attr("env");
+        final_mut.remove_attr("nested");
+        final_mut.remove_attr("tags");
+        assert!(final_mut.attributes().is_none());
+
+        // Verify payload JSON serialization does not contain empty attributes field
+        let payload = final_mut.payload().unwrap();
+        assert!(payload.get("attributes").is_none());
+    }
 }
