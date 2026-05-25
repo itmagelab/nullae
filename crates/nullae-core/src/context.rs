@@ -1,5 +1,5 @@
 use crate::storage::Storage;
-use crate::storage::consul::Consul;
+use crate::storage::StorageBackend;
 
 /// Application context that holds shared resources and configuration.
 /// This should be passed through all application layers according to conventions.md.
@@ -19,20 +19,19 @@ impl<S: Storage> Context<S> {
     }
 }
 
-impl Context<Consul> {
-    /// Creates a new Context with initialized Consul storage.
+impl Context<StorageBackend> {
+    /// Creates a new Context with initialized StorageBackend storage.
     ///
     /// # Errors
     ///
     /// Returns an error if:
-    /// - Required environment variables are not set (NULLAE_CONSUL_URL)
     /// - Storage initialization fails
     pub fn new() -> anyhow::Result<Self> {
-        let storage = Consul::new()?;
+        let storage = StorageBackend::new()?;
         Ok(Self { storage })
     }
 }
 
-/// Type alias for the default Context with Consul storage.
+/// Type alias for the default Context with dynamic StorageBackend.
 /// This provides backward compatibility for existing code.
-pub type AppContext = Context<Consul>;
+pub type AppContext = Context<StorageBackend>;

@@ -7,6 +7,8 @@ pub use crate::entity::{Entity, EntityKind, HashID, Metadata};
 pub use crate::index::{Index, Item};
 pub use crate::storage::Storage;
 pub use crate::storage::consul::{Consul, Record};
+pub use crate::storage::etcd::Etcd;
+pub use crate::storage::StorageBackend;
 pub use crate::storage::memory::InMemoryStorage;
 pub use crate::{Hashable, Indexable};
 pub use nullae_macros::{Entity, Indexable};
